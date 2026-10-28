@@ -250,7 +250,7 @@ void Experiment3::RunConfig(Variant var, UploadPath path, int bones, int run,
     mat4 identity, view = lookAt(vec3(0,2,10), vec3(0,0,0), vec3(0,1,0));
     mat4 proj = perspective(60.0f, 1.333f, 0.01f, 1000.0f);
 
-    const int NUM_WARMUP = 100;
+    const int NUM_WARMUP = 200;
     const int NUM_FRAMES = 500;
 
     std::vector<double> gpuTimes;
@@ -389,16 +389,15 @@ double Experiment3::Median(std::vector<double>& v) {
 void Experiment3::Run() {
     std::cout << "\n=== Experiment 3: Upload Path Comparison ===\n";
 
-    // Create 100k vertex mesh with 4 influences
-    BenchMesh mesh;
-    mesh.Generate(100000, 120, 4);
-    std::cout << "[E3] Mesh: " << mesh.VertexCount() << " vertices\n";
-
     const int boneCounts[] = {60, 120, 256, 512};
     const int NUM_RUNS = 5;
 
     for (Variant var : {VARIANT_LBS_PRE, VARIANT_DQS_PRE}) {
         for (int bones : boneCounts) {
+            // Generate matching mesh with joint indices in [0, bones - 1]
+            BenchMesh mesh;
+            mesh.Generate(100000, bones, 4);
+
             for (UploadPath path : {PATH_UNIFORM, PATH_UBO, PATH_TBO}) {
                 for (int run = 1; run <= NUM_RUNS; ++run) {
                     RunConfig(var, path, bones, run, mesh);
@@ -408,6 +407,7 @@ void Experiment3::Run() {
     }
 
     WriteCSV("Results/e3_path.csv");
+    WriteCSV("e3_path.csv");
     std::cout << "[E3] Done.\n";
 }
 

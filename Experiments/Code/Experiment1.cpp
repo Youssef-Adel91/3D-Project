@@ -176,18 +176,19 @@ double Experiment1::ComputeVolume(const std::vector<vec3>& pos,
 std::vector<Experiment1::SliceResult> Experiment1::ComputeSliceDistances(
     const std::vector<vec3>& skinnedPos,
     const std::vector<vec3>& restPos,
+    const std::vector<ivec4>& joints,
+    const std::vector<vec4>& weights,
     int numSlices) const
 {
-    // Bar lies along X axis. Compute YZ radial distance for each vertex.
-    // Group vertices into X-slices, compute mean distance per slice.
-    
     float xMin = -5.1f, xMax = 5.1f;
     float sliceW = (xMax - xMin) / numSlices;
 
-    std::vector<float> sumSkinned(numSlices, 0.0f);
-    std::vector<float> sumRest(numSlices, 0.0f);
-    std::vector<int>   count(numSlices, 0);
+    std::vector<vec3> sumRestPos(numSlices, vec3(0, 0, 0));
+    std::vector<vec3> sumSkinnedPos(numSlices, vec3(0, 0, 0));
+    std::vector<int> count(numSlices, 0);
+    std::vector<bool> isBlended(numSlices, false);
     std::vector<float> sliceCenters(numSlices, 0.0f);
+    std::vector<std::vector<int>> sliceIndices(numSlices);
 
     for (int s = 0; s < numSlices; ++s) {
         sliceCenters[s] = xMin + (s + 0.5f) * sliceW;
@@ -198,21 +199,58 @@ std::vector<Experiment1::SliceResult> Experiment1::ComputeSliceDistances(
         int s = (int)((x - xMin) / sliceW);
         if (s < 0) s = 0;
         if (s >= numSlices) s = numSlices - 1;
-        // Radial distance from X axis = sqrt(y^2 + z^2)
-        float rSkinned = sqrtf(skinnedPos[i].y * skinnedPos[i].y + skinnedPos[i].z * skinnedPos[i].z);
-        float rRest    = sqrtf(restPos[i].y    * restPos[i].y    + restPos[i].z    * restPos[i].z);
-        sumSkinned[s] += rSkinned;
-        sumRest[s]    += rRest;
+
+        sumRestPos[s] = sumRestPos[s] + restPos[i];
+        sumSkinnedPos[s] = sumSkinnedPos[s] + skinnedPos[i];
         count[s]++;
+        sliceIndices[s].push_back((int)i);
+
+        // Check if vertex has blended weights between multiple bones
+        // In dq.gltf, bone 0 is child and bone 1 is root.
+        float w0 = 0.0f;
+        const ivec4& j = joints[i];
+        const vec4& w = weights[i];
+        if (j.x == 0) w0 = w.x;
+        else if (j.y == 0) w0 = w.y;
+        else if (j.z == 0) w0 = w.z;
+        else if (j.w == 0) w0 = w.w;
+        if (w0 > 0.001f && w0 < 0.999f) {
+            isBlended[s] = true;
+        }
     }
 
     std::vector<SliceResult> results;
     for (int s = 0; s < numSlices; ++s) {
         if (count[s] == 0) continue;
-        float rSkin = sumSkinned[s] / count[s];
-        float rRest = sumRest[s]    / count[s];
-        float ratio = (rRest > 1e-6f) ? (rSkin / rRest) : 1.0f;
-        results.push_back({sliceCenters[s], ratio});
+        int n = count[s];
+        vec3 cRest = sumRestPos[s] * (1.0f / (float)n);
+        vec3 cSkin = sumSkinnedPos[s] * (1.0f / (float)n);
+
+        float sumDistRest = 0.0f;
+        float sumDistSkin = 0.0f;
+        float sumAxisRest = 0.0f;
+        float sumAxisSkin = 0.0f;
+
+        for (int idx : sliceIndices[s]) {
+            vec3 dRest = restPos[idx] - cRest;
+            vec3 dSkin = skinnedPos[idx] - cSkin;
+            sumDistRest += sqrtf(dRest.x*dRest.x + dRest.y*dRest.y + dRest.z*dRest.z);
+            sumDistSkin += sqrtf(dSkin.x*dSkin.x + dSkin.y*dSkin.y + dSkin.z*dSkin.z);
+
+            // Legacy radial distance from longitudinal X axis
+            sumAxisRest += sqrtf(restPos[idx].y * restPos[idx].y + restPos[idx].z * restPos[idx].z);
+            sumAxisSkin += sqrtf(skinnedPos[idx].y * skinnedPos[idx].y + skinnedPos[idx].z * skinnedPos[idx].z);
+        }
+
+        float meanDistRest = sumDistRest / n;
+        float meanDistSkin = sumDistSkin / n;
+        float thicknessRatio = (meanDistRest > 1e-6f) ? (meanDistSkin / meanDistRest) : 1.0f;
+
+        float meanAxisRest = sumAxisRest / n;
+        float meanAxisSkin = sumAxisSkin / n;
+        float axisDistRatio = (meanAxisRest > 1e-6f) ? (meanAxisSkin / meanAxisRest) : 1.0f;
+
+        results.push_back({sliceCenters[s], thicknessRatio, axisDistRatio, isBlended[s]});
     }
     return results;
 }
@@ -627,12 +665,22 @@ void Experiment1::Run() {
             std::vector<vec3> sk = SkinLBS(restPos, joints, weights, pp, invBind);
             double vol = ComputeVolume(sk, indices);
             double vRatio = (mRestVolume > 1e-9) ? vol / mRestVolume : 0.0;
-            auto slices = ComputeSliceDistances(sk, restPos);
-            float maxDR = 0.0f;
-            for (auto& s : slices) if (s.distRatio > maxDR) maxDR = s.distRatio;
-            mQualityRows.push_back({"LBS", "Twist", deg, vRatio, maxDR});
+            auto slices = ComputeSliceDistances(sk, restPos, joints, weights);
+            float minThick = 1e9f, maxThick = -1e9f;
+            float maxAxisLegacy = 0.0f;
+            bool foundBlended = false;
             for (auto& s : slices) {
-                mSliceRows.push_back({"LBS", "Twist", deg, s.sliceX, s.distRatio});
+                if (s.isBlended) {
+                    foundBlended = true;
+                    if (s.thicknessRatio < minThick) minThick = s.thicknessRatio;
+                    if (s.thicknessRatio > maxThick) maxThick = s.thicknessRatio;
+                }
+                if (s.maxAxisDistRatioLegacy > maxAxisLegacy) maxAxisLegacy = s.maxAxisDistRatioLegacy;
+            }
+            if (!foundBlended) { minThick = 1.0f; maxThick = 1.0f; }
+            mQualityRows.push_back({"LBS", "Twist", deg, vRatio, minThick, maxThick, maxAxisLegacy});
+            for (auto& s : slices) {
+                mSliceRows.push_back({"LBS", "Twist", deg, s.sliceX, s.thicknessRatio, s.maxAxisDistRatioLegacy});
             }
         }
 
@@ -642,12 +690,22 @@ void Experiment1::Run() {
             std::vector<vec3> sk = SkinDQS(restPos, joints, weights, pp, invBindDQ);
             double vol = ComputeVolume(sk, indices);
             double vRatio = (mRestVolume > 1e-9) ? vol / mRestVolume : 0.0;
-            auto slices = ComputeSliceDistances(sk, restPos);
-            float maxDR = 0.0f;
-            for (auto& s : slices) if (s.distRatio > maxDR) maxDR = s.distRatio;
-            mQualityRows.push_back({"DQS", "Twist", deg, vRatio, maxDR});
+            auto slices = ComputeSliceDistances(sk, restPos, joints, weights);
+            float minThick = 1e9f, maxThick = -1e9f;
+            float maxAxisLegacy = 0.0f;
+            bool foundBlended = false;
             for (auto& s : slices) {
-                mSliceRows.push_back({"DQS", "Twist", deg, s.sliceX, s.distRatio});
+                if (s.isBlended) {
+                    foundBlended = true;
+                    if (s.thicknessRatio < minThick) minThick = s.thicknessRatio;
+                    if (s.thicknessRatio > maxThick) maxThick = s.thicknessRatio;
+                }
+                if (s.maxAxisDistRatioLegacy > maxAxisLegacy) maxAxisLegacy = s.maxAxisDistRatioLegacy;
+            }
+            if (!foundBlended) { minThick = 1.0f; maxThick = 1.0f; }
+            mQualityRows.push_back({"DQS", "Twist", deg, vRatio, minThick, maxThick, maxAxisLegacy});
+            for (auto& s : slices) {
+                mSliceRows.push_back({"DQS", "Twist", deg, s.sliceX, s.thicknessRatio, s.maxAxisDistRatioLegacy});
             }
         }
 
@@ -665,12 +723,22 @@ void Experiment1::Run() {
             std::vector<vec3> sk = SkinLBS(restPos, joints, weights, pp, invBind);
             double vol = ComputeVolume(sk, indices);
             double vRatio = (mRestVolume > 1e-9) ? vol / mRestVolume : 0.0;
-            auto slices = ComputeSliceDistances(sk, restPos);
-            float maxDR = 0.0f;
-            for (auto& s : slices) if (s.distRatio > maxDR) maxDR = s.distRatio;
-            mQualityRows.push_back({"LBS", "Bend", deg, vRatio, maxDR});
+            auto slices = ComputeSliceDistances(sk, restPos, joints, weights);
+            float minThick = 1e9f, maxThick = -1e9f;
+            float maxAxisLegacy = 0.0f;
+            bool foundBlended = false;
             for (auto& s : slices) {
-                mSliceRows.push_back({"LBS", "Bend", deg, s.sliceX, s.distRatio});
+                if (s.isBlended) {
+                    foundBlended = true;
+                    if (s.thicknessRatio < minThick) minThick = s.thicknessRatio;
+                    if (s.thicknessRatio > maxThick) maxThick = s.thicknessRatio;
+                }
+                if (s.maxAxisDistRatioLegacy > maxAxisLegacy) maxAxisLegacy = s.maxAxisDistRatioLegacy;
+            }
+            if (!foundBlended) { minThick = 1.0f; maxThick = 1.0f; }
+            mQualityRows.push_back({"LBS", "Bend", deg, vRatio, minThick, maxThick, maxAxisLegacy});
+            for (auto& s : slices) {
+                mSliceRows.push_back({"LBS", "Bend", deg, s.sliceX, s.thicknessRatio, s.maxAxisDistRatioLegacy});
             }
         }
 
@@ -680,12 +748,22 @@ void Experiment1::Run() {
             std::vector<vec3> sk = SkinDQS(restPos, joints, weights, pp, invBindDQ);
             double vol = ComputeVolume(sk, indices);
             double vRatio = (mRestVolume > 1e-9) ? vol / mRestVolume : 0.0;
-            auto slices = ComputeSliceDistances(sk, restPos);
-            float maxDR = 0.0f;
-            for (auto& s : slices) if (s.distRatio > maxDR) maxDR = s.distRatio;
-            mQualityRows.push_back({"DQS", "Bend", deg, vRatio, maxDR});
+            auto slices = ComputeSliceDistances(sk, restPos, joints, weights);
+            float minThick = 1e9f, maxThick = -1e9f;
+            float maxAxisLegacy = 0.0f;
+            bool foundBlended = false;
             for (auto& s : slices) {
-                mSliceRows.push_back({"DQS", "Bend", deg, s.sliceX, s.distRatio});
+                if (s.isBlended) {
+                    foundBlended = true;
+                    if (s.thicknessRatio < minThick) minThick = s.thicknessRatio;
+                    if (s.thicknessRatio > maxThick) maxThick = s.thicknessRatio;
+                }
+                if (s.maxAxisDistRatioLegacy > maxAxisLegacy) maxAxisLegacy = s.maxAxisDistRatioLegacy;
+            }
+            if (!foundBlended) { minThick = 1.0f; maxThick = 1.0f; }
+            mQualityRows.push_back({"DQS", "Bend", deg, vRatio, minThick, maxThick, maxAxisLegacy});
+            for (auto& s : slices) {
+                mSliceRows.push_back({"DQS", "Bend", deg, s.sliceX, s.thicknessRatio, s.maxAxisDistRatioLegacy});
             }
         }
 
@@ -694,7 +772,9 @@ void Experiment1::Run() {
 
     std::cout << "\n-- Writing CSVs --\n";
     WriteQualityCSV("Results/e1_quality.csv");
+    WriteQualityCSV("e1_quality.csv");
     WriteSlicesCSV("Results/e1_slices.csv");
+    WriteSlicesCSV("e1_slices.csv");
 
     std::cout << "[E1] Done. Results written.\n";
 }
@@ -709,10 +789,11 @@ void Experiment1::WriteQualityCSV(const std::string& path) const {
         std::cerr << "[E1] ERROR: Cannot write " << path << "\n";
         return;
     }
-    f << "method,motion,angle_deg,volume_ratio,max_dist_ratio\n";
+    f << "method,motion,angle_deg,volume_ratio,min_thickness_ratio,max_thickness_ratio,max_axis_dist_ratio_legacy\n";
     for (const auto& r : mQualityRows) {
         f << r.method << "," << r.motion << "," << r.angleDeg << ","
-          << r.volumeRatio << "," << r.maxDistRatio << "\n";
+          << r.volumeRatio << "," << r.minThicknessRatio << ","
+          << r.maxThicknessRatio << "," << r.maxAxisDistRatioLegacy << "\n";
     }
     std::cout << "[E1] Wrote " << path << " (" << mQualityRows.size() << " rows)\n";
 }
@@ -723,10 +804,10 @@ void Experiment1::WriteSlicesCSV(const std::string& path) const {
         std::cerr << "[E1] ERROR: Cannot write " << path << "\n";
         return;
     }
-    f << "method,motion,angle_deg,slice_x,dist_ratio\n";
+    f << "method,motion,angle_deg,slice_x,thickness_ratio,max_axis_dist_ratio_legacy\n";
     for (const auto& r : mSliceRows) {
         f << r.method << "," << r.motion << "," << r.angleDeg << ","
-          << r.sliceX << "," << r.distRatio << "\n";
+          << r.sliceX << "," << r.thicknessRatio << "," << r.maxAxisDistRatioLegacy << "\n";
     }
     std::cout << "[E1] Wrote " << path << " (" << mSliceRows.size() << " rows)\n";
 }

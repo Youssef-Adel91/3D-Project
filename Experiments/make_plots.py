@@ -134,7 +134,8 @@ def plot_twist_slices():
                 m = row['method']
                 ang = int(float(row['angle_deg']))
                 x = float(row['slice_x'])
-                dr = float(row['dist_ratio'])
+                # Use thickness_ratio if available, fallback to dist_ratio
+                dr = float(row['thickness_ratio']) if 'thickness_ratio' in row else float(row['dist_ratio'])
                 key = (m, ang)
                 if key not in data:
                     data[key] = []
@@ -157,11 +158,11 @@ def plot_twist_slices():
     ax1.axhline(1.0, color='gray', linestyle=':', alpha=0.6)
     ax1.axvline(0.0, color='black', linestyle='--', alpha=0.4, label='Joint center (x=0)')
     ax1.set_xlabel('Bar Longitudinal Axis X (joint at x=0)')
-    ax1.set_ylabel('Mean Radial Distance Ratio $r(x) / r_0$')
+    ax1.set_ylabel('Per-Slice Thickness Ratio $r_{skinned} / r_{rest}$')
     ax1.set_title('LBS: Radial Shrinkage Along Bar (Candy-Wrapper Artifact)')
     ax1.legend(loc='lower left')
     ax1.grid(True, linestyle='--', alpha=0.5)
-    ax1.set_ylim(0.45, 1.05)
+    ax1.set_ylim(0.20, 1.05)
 
     # DQS panel
     for idx, ang in enumerate(target_angles):
@@ -197,8 +198,8 @@ def plot_bend_metrics():
         print(f"[Warning] {csv_path} not found. Skipping plot 3.")
         return
 
-    angles_lbs, vols_lbs, bulges_lbs = [], [], []
-    angles_dqs, vols_dqs, bulges_dqs = [], [], []
+    angles_lbs, vols_lbs, min_thick_lbs, max_thick_lbs = [], [], [], []
+    angles_dqs, vols_dqs, min_thick_dqs, max_thick_dqs = [], [], [], []
 
     with open(csv_path, 'r') as f:
         reader = csv.DictReader(f)
@@ -207,21 +208,24 @@ def plot_bend_metrics():
                 m = row['method']
                 deg = float(row['angle_deg'])
                 vr = float(row['volume_ratio'])
-                dr = float(row['max_dist_ratio'])
+                min_t = float(row['min_thickness_ratio']) if 'min_thickness_ratio' in row else 1.0
+                max_t = float(row['max_thickness_ratio']) if 'max_thickness_ratio' in row else 1.0
                 if m == 'LBS':
                     angles_lbs.append(deg)
                     vols_lbs.append(vr)
-                    bulges_lbs.append(dr)
+                    min_thick_lbs.append(min_t)
+                    max_thick_lbs.append(max_t)
                 elif m == 'DQS':
                     angles_dqs.append(deg)
                     vols_dqs.append(vr)
-                    bulges_dqs.append(dr)
+                    min_thick_dqs.append(min_t)
+                    max_thick_dqs.append(max_t)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5), dpi=300)
 
     # Subplot 1: Volume ratio under bend
-    ax1.plot(angles_lbs, vols_lbs, 'o-', color=COLORS['LBS'], label='LBS')
-    ax1.plot(angles_dqs, vols_dqs, 's-', color=COLORS['DQS'], label='DQS')
+    ax1.plot(angles_lbs, vols_lbs, 'o-', color=COLORS['LBS'], label='LBS (Volume Collapse)')
+    ax1.plot(angles_dqs, vols_dqs, 's-', color=COLORS['DQS'], label='DQS (Volume Preserved)')
     ax1.axhline(1.0, color='gray', linestyle=':', alpha=0.6)
     ax1.set_xlabel('Bend Angle (degrees)')
     ax1.set_ylabel('Volume Ratio $V(\\theta) / V_0$')
@@ -229,16 +233,20 @@ def plot_bend_metrics():
     ax1.legend(loc='lower left')
     ax1.grid(True, linestyle='--', alpha=0.5)
     ax1.set_xticks(np.arange(0, 135, 15))
+    ax1.set_ylim(0.92, 1.01)
 
-    # Subplot 2: Bulging (max distance ratio)
-    ax2.plot(angles_lbs, bulges_lbs, 'o-', color=COLORS['LBS'], label='LBS (Bulge/Elongation)')
-    ax2.plot(angles_dqs, bulges_dqs, 's-', color=COLORS['DQS'], label='DQS (Joint Bulge)')
+    # Subplot 2: Joint Profile & Bulging (Rotation-Invariant Thickness)
+    ax2.plot(angles_lbs, min_thick_lbs, 'o-', color=COLORS['LBS'], label='LBS Min Thickness (Pinching)')
+    ax2.plot(angles_dqs, min_thick_dqs, 's--', color=COLORS['DQS'], label='DQS Min Thickness (Preserved)')
+    ax2.plot(angles_dqs, max_thick_dqs, '^-', color='#9467bd', label='DQS Max Thickness (Bulge)')
+    ax2.axhline(1.0, color='gray', linestyle=':', alpha=0.6, label='Rest Thickness (1.0)')
     ax2.set_xlabel('Bend Angle (degrees)')
-    ax2.set_ylabel('Max Radial Distance Ratio')
-    ax2.set_title('Bend Motion: Joint Profile & Bulging')
-    ax2.legend(loc='upper left')
+    ax2.set_ylabel('Rotation-Invariant Thickness Ratio')
+    ax2.set_title('Bend Motion: Joint Profile & Bulging (Rotation-Invariant)')
+    ax2.legend(loc='lower left')
     ax2.grid(True, linestyle='--', alpha=0.5)
     ax2.set_xticks(np.arange(0, 135, 15))
+    ax2.set_ylim(0.75, 1.05)
 
     plt.tight_layout()
     out1 = os.path.join(PLOTS_DIR, "plot3_bend_volume_bulge.png")
@@ -446,8 +454,8 @@ def plot_upload_paths():
                 ax1.plot(x_valid, y_gpu, f'{path_markers[p]}:', color=path_colors[p],
                          alpha=0.6, label=f'{p.upper()} (GPU only)')
             for ex_b in x_exceed:
-                ax1.scatter([ex_b], [0.20], marker='x', color='red', s=100, zorder=5)
-                ax1.annotate('Exceeds\nLimit', xy=(ex_b, 0.20), xytext=(ex_b, 0.23),
+                ax1.scatter([ex_b], [0.08], marker='x', color='red', s=100, zorder=5)
+                ax1.annotate('Exceeds\nLimit', xy=(ex_b, 0.08), xytext=(ex_b, 0.12),
                              ha='center', fontsize=8, color='red', weight='bold')
 
     ax1.set_xlabel('Bone Count')
@@ -456,6 +464,7 @@ def plot_upload_paths():
     ax1.set_xticks([60, 120, 256, 512])
     ax1.legend(loc='upper left', fontsize=9)
     ax1.grid(True, linestyle='--', alpha=0.5)
+    ax1.set_ylim(bottom=0.0)
 
     # Panel 2: DQS-pre
     for p in paths_order:
@@ -482,8 +491,8 @@ def plot_upload_paths():
                 ax2.plot(x_valid, y_gpu, f'{path_markers[p]}:', color=path_colors[p],
                          alpha=0.6, label=f'{p.upper()} (GPU only)')
             for ex_b in x_exceed:
-                ax2.scatter([ex_b], [0.10], marker='x', color='red', s=100, zorder=5)
-                ax2.annotate('Exceeds\nLimit', xy=(ex_b, 0.10), xytext=(ex_b, 0.12),
+                ax2.scatter([ex_b], [0.08], marker='x', color='red', s=100, zorder=5)
+                ax2.annotate('Exceeds\nLimit', xy=(ex_b, 0.08), xytext=(ex_b, 0.11),
                              ha='center', fontsize=8, color='red', weight='bold')
 
     ax2.set_xlabel('Bone Count')

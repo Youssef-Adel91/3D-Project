@@ -99,106 +99,103 @@ Transform feedback was captured directly on vertex position varyings with identi
 
 ## Results Summary (Measured Values)
 
-### Experiment 1: Deformation Quality (`dq.gltf`)
+### 1. Deformation Quality & Volume Preservation (`dq.gltf`: 5,226 Vertices)
 
-Full data recorded in [`Results/e1_quality.csv`](Results/e1_quality.csv) and [`Results/e1_slices.csv`](Results/e1_slices.csv).
+Rotation-invariant slice thickness is evaluated across all slices containing blended (skinned) vertices. The legacy column records the distance of vertices from the rest longitudinal X-axis.
 
-#### Twist Motion (Volume Preservation & Candy-Wrapper Collapse)
-- Mesh rest volume $V_0 = 40.000$ ($5,226$ vertices, $2,716$ triangles, 32 slices).
+| Motion | Angle | LBS Vol. Ratio | DQS Vol. Ratio | LBS Min Thickness | DQS Min Thickness | DQS Max Thickness (Bulge) | Legacy Axis Ratio |
+|---|---|---|---|---|---|---|---|
+| **Twist** |   0° | 100.00% | 100.00% | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| **Twist** |  30° | 98.97% | 100.04% | 0.9683 | 1.0000 | 1.0000 | 1.0000 |
+| **Twist** |  60° | 96.05% | 100.03% | 0.8759 | 1.0000 | 1.0000 | 1.0000 |
+| **Twist** |  90° | 92.02% | 99.98% | 0.7310 | 1.0000 | 1.0000 | 1.0000 |
+| **Twist** | 120° | 87.96% | 99.87% | 0.5491 | 1.0000 | 1.0000 | 1.0000 |
+| **Twist** | 150° | 84.95% | 99.69% | 0.3619 | 1.0000 | 1.0000 | 1.0000 |
+| **Twist** | 180° | 83.81% | 99.43% | 0.2615 | 1.0000 | 1.0000 | 1.0000 |
+|---|---|---|---|---|---|---|---|
+| **Bend** |   0° | 100.00% | 100.00% | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+| **Bend** |  30° | 99.44% | 99.97% | 0.9842 | 1.0000 | 1.0000 | 3.1649 |
+| **Bend** |  60° | 97.90% | 99.87% | 0.9385 | 0.9999 | 1.0000 | 5.3084 |
+| **Bend** |  90° | 95.80% | 99.70% | 0.8691 | 0.9999 | 1.0000 | 6.0735 |
+| **Bend** | 120° | 93.70% | 99.45% | 0.7865 | 0.9999 | 1.0001 | 5.2372 |
 
-| Angle (deg) | LBS Volume Ratio | DQS Volume Ratio | Volume Loss (LBS) | Volume Loss (DQS) |
-|---|---|---|---|---|
-| **0°** | 1.000000 | 1.000000 | 0.00% | 0.00% |
-| **45°** | 0.977093 | 1.000410 | -2.29% | +0.04% |
-| **90°** | 0.920188 | 0.999774 | -7.98% | -0.02% |
-| **135°** | 0.862617 | 0.997879 | -13.74% | -0.21% |
-| **180°** | **0.838106** | **0.994269** | **-16.19%** | **-0.57%** |
+> **Theoretical vs Measured Slices:** The theoretical continuous LBS profile gives a normalized radius of $\cos(45^\circ) \approx 0.7071$ at 90° twist and $0.0000$ at 180° twist at the exact joint plane ($w=0.5$). On the discrete `dq.gltf` mesh, the measured minimum per-slice thickness ratios are **0.7310** at 90° and **0.2615** at 180° (both situated at slice center $x = -0.1594$), reflecting finite vertex sampling and linear weight falloff.
 
-- **Candy-Wrapper Collapse:** At 180° twist, LBS loses **16.19%** of the cylinder volume due to radial cross-section collapse along the joint boundary. DQS maintains **99.43%** volume preservation across the entire 0°–180° sweep.
-- **Slice Radial Distance Ratios ($r/r_0$):** At the central joint boundary ($x \approx 0$), the slice radial distance under LBS drops to **$0.707$** at 90° and reaches **$0.000$** (pinch point) under theoretical 180° twist, whereas DQS maintains $r/r_0 \approx 1.000$ across all slices.
 
-#### Bend Motion (Bulging)
-- At 90° bend: LBS volume ratio is **$0.957986$**; DQS volume ratio is **$0.997026$**.
-- Peak bulge / elongation occurs around 90° bend with maximum radial distance ratio reaching **$6.07351$** at the outer corner of the joint elbow for both methods.
+### 2. Vertex Count Scaling (60 Bones, 4 Influences)
 
----
+Reported values list the median of the 5 run medians followed by `[min – max]` across the 5 runs.
 
-### Experiment 2: GPU Timing of Four Skinning Variants
+| Skinning Variant | 9,996 Vertices | 99,852 Vertices | 999,996 Vertices |
+|---|---|---|---|
+| **LBS-naive** | 0.063 ms [0.063 – 0.063] | 0.365 ms [0.357 – 0.379] | 2.158 ms [2.104 – 2.169] |
+| **LBS-pre** | 0.014 ms [0.014 – 0.015] | 0.102 ms [0.096 – 0.112] | 0.932 ms [0.876 – 0.939] |
+| **DQS-naive** | 0.014 ms [0.012 – 0.014] | 0.132 ms [0.129 – 0.138] | 1.060 ms [1.042 – 1.064] |
+| **DQS-pre** | 0.006 ms [0.006 – 0.006] | 0.090 ms [0.079 – 0.096] | 0.913 ms [0.887 – 0.922] |
 
-Full dataset (564 rows, 5 runs shuffled per configuration, 300 warmup + 2000 measured frames per run) recorded in [`Results/e2_gpu.csv`](Results/e2_gpu.csv).
+- **CPU Precomputation Speedup:** Precomputing animated palettes improves vertex shader execution by **3.56×** at 99,852 vertices and **2.32×** at 999,996 vertices for LBS, and **1.48×** (99,852) / **1.16×** (999,996) for DQS.
+- **DQS-pre vs LBS-pre at Scale:** At 999,996 vertices, LBS-pre (0.932 ms [0.876 – 0.939]) and DQS-pre (0.913 ms [0.887 – 0.922]) exhibit overlapping run-to-run ranges with an absolute median difference of only **0.019 ms (2.0%)**, demonstrating that at high vertex loads, execution time is dominated by vertex buffer bandwidth and pipeline throughput rather than dual quaternion arithmetic.
 
-Primary measurement was performed with `GL_RASTERIZER_DISCARD` enabled to isolate vertex processing and vertex cache throughput.
+### 3. Bone Count Scaling (99,852 Vertices, 4 Influences)
 
-#### 1. Scaling Across Vertex Counts (60 Bones, 4 Influences per Vertex)
+| Skinning Variant | 20 Bones | 60 Bones | 120 Bones |
+|---|---|---|---|
+| **LBS-naive** | 0.109 ms [0.106 – 0.116] | 0.365 ms [0.357 – 0.379] | 0.694 ms [0.670 – 0.705] |
+| **LBS-pre** | 0.086 ms [0.084 – 0.092] | 0.102 ms [0.096 – 0.112] | 0.224 ms [0.210 – 0.227] |
+| **DQS-naive** | 0.097 ms [0.096 – 0.098] | 0.132 ms [0.129 – 0.138] | 0.212 ms [0.203 – 0.240] |
+| **DQS-pre** | 0.084 ms [0.084 – 0.096] | 0.090 ms [0.079 – 0.096] | 0.096 ms [0.083 – 0.098] |
 
-| Vertex Count | LBS-naive (ms) | LBS-pre (ms) | DQS-naive (ms) | DQS-pre (ms) | Speedup (DQS-pre vs LBS-naive) |
-|---|---|---|---|---|---|
-| **10,000** | 0.01536 | 0.00768 | 0.01331 | **0.00717** | **2.14x** |
-| **100,000** | 0.15872 | 0.07680 | 0.13722 | **0.07373** | **2.15x** |
-| **1,000,000** | 1.57491 | 0.77107 | 1.37830 | **0.73933** | **2.13x** |
+- **Bone Count Impact:** Shader execution time increases with bone count across all variants. In LBS-naive, moving from 20 to 120 bones increases execution time from 0.109 ms to 0.694 ms (6.39× increase) due to constant cache pressure and expanded uniform address space. LBS-pre rises from 0.086 ms to 0.224 ms (2.60×). DQS-pre exhibits the mildest scaling (0.084 ms to 0.096 ms) because its 8-component compact representation fits within 3.84 KB of constant cache.
 
-- **Linearity:** Scaling is strictly linear ($R^2 > 0.999$) with vertex count. A 10x increase in vertex count results in a 10.0x–10.2x increase in GPU execution time.
-- **Precomputation Benefit:** Moving bone-palette combination ($M_{\text{anim}} = M_{\text{pose}} \cdot M_{\text{invBind}}$ or $DQ_{\text{anim}} = DQ_{\text{invBind}} \cdot DQ_{\text{pose}}$) to the CPU roughly **doubles vertex shader throughput** (2.05x–2.15x speedup), because it replaces per-vertex matrix/dual-quaternion multiplication with a single blended accumulation.
-- **DQS-pre Efficiency:** DQS-pre is consistently the fastest skinning variant on modern GPU hardware ($0.739$ ms for 1M vertices), outperforming LBS-pre ($0.771$ ms) due to packing dual quaternions as 2 vectors (`mat2x4`, 8 floats) rather than 4 column vectors (`mat4`, 16 floats).
+### 4. Influence Count Scaling (99,852 Vertices, 60 Bones)
 
-#### 2. Scaling with Bone Count (100,000 Vertices, 4 Influences)
+| Skinning Variant | 1 Influence | 2 Influences | 4 Influences |
+|---|---|---|---|
+| **LBS-naive** | 0.121 ms [0.109 – 0.123] | 0.196 ms [0.195 – 0.196] | 0.365 ms [0.357 – 0.379] |
+| **LBS-pre** | 0.087 ms [0.080 – 0.096] | 0.088 ms [0.088 – 0.090] | 0.102 ms [0.096 – 0.112] |
+| **DQS-naive** | 0.097 ms [0.092 – 0.098] | 0.101 ms [0.101 – 0.102] | 0.132 ms [0.129 – 0.138] |
+| **DQS-pre** | 0.084 ms [0.082 – 0.090] | 0.087 ms [0.086 – 0.088] | 0.090 ms [0.079 – 0.096] |
 
-| Bone Count | LBS-naive (ms) | LBS-pre (ms) | DQS-naive (ms) | DQS-pre (ms) |
-|---|---|---|---|---|
-| **20 Bones** | 0.15872 | 0.07680 | 0.13722 | **0.07373** |
-| **60 Bones** | 0.15872 | 0.07680 | 0.13722 | **0.07373** |
-| **120 Bones** | 0.15872 | 0.07680 | 0.13722 | **0.07373** |
+- **Influence Count Scaling:** In naive shaders, execution scales substantially with influence count because each influence requires matrix multiplication or dual-quaternion blending: LBS-naive scales from 0.121 ms (1 influence) to 0.365 ms (4 influences, a 3.01× increase). In contrast, precomputed shaders exhibit minimal sensitivity to influence count (LBS-pre: 0.087 ms to 0.102 ms; DQS-pre: 0.084 ms to 0.090 ms) because transformed bone transforms are already consolidated.
 
-*Note:* Vertex shader skinning time is independent of total bone count because each vertex only fetches and blends its active influences ($k=4$). Total bone count primarily affects upload and CPU palette generation time.
 
-#### 3. Scaling with Influences per Vertex (100,000 Vertices, 60 Bones)
+### 5. Upload Path Performance & Driver Limits (99,852 Vertices, 4 Influences)
 
-| Influences | LBS-naive (ms) | LBS-pre (ms) | DQS-naive (ms) | DQS-pre (ms) |
-|---|---|---|---|---|
-| **1 Influence** | 0.04608 | 0.02458 | 0.03891 | **0.02355** |
-| **2 Influences** | 0.08294 | 0.04198 | 0.07270 | **0.03994** |
-| **4 Influences** | 0.15872 | 0.07680 | 0.13722 | **0.07373** |
-
-Execution time scales proportionally with the compile-time `#define INFLUENCES` unrolling in the shader.
-
-#### 4. Full Rasterization Confirmation (100k Vertices, 60 Bones, 4 Influences)
-To confirm that rasterizer discard did not alter variant ordering:
-
-| Variant | Full Render GPU Time (ms) | Relative Ranking |
-|---|---|---|
-| **DQS-pre** | **0.099664 ms** | 1 (Fastest) |
-| **LBS-pre** | **0.113248 ms** | 2 |
-| **DQS-naive** | **0.138384 ms** | 3 |
-| **LBS-naive** | **0.398992 ms** | 4 |
-
-#### 5. Real Character Benchmark (`Woman.gltf`: 5,718 Vertices, 43 Bones, 4 Influences)
-
-| Variant | GPU Median (ms) | CPU Palette Gen (ms) | Host-to-Device Upload (ms) | Total Frame Time (ms) |
-|---|---|---|---|---|
-| **DQS-pre** | **0.003328** | 0.00084 | 0.00012 | **0.00429** |
-| **LBS-pre** | **0.004096** | 0.00062 | 0.00014 | **0.00486** |
-| **DQS-naive** | **0.005056** | 0.00031 | 0.00021 | **0.00558** |
-| **LBS-naive** | **0.008416** | 0.00028 | 0.00024 | **0.00894** |
-
----
-
-### Experiment 3: Joint-Data Upload Paths
-
-Full dataset (120 rows across 5 runs) recorded in [`Results/e3_path.csv`](Results/e3_path.csv). Evaluated on 100k vertices with 4 influences for LBS-pre and DQS-pre across bone counts:
+Evaluates Uniform Arrays, Uniform Buffer Objects (UBO, std140), and Texture Buffer Objects (TBO). Values format: `GPU median [min – max] + upload time`.
 
 | Variant | Upload Path | 60 Bones | 120 Bones | 256 Bones | 512 Bones |
 |---|---|---|---|---|---|
-| **LBS-pre** | **Uniform Array** | 0.186 ms | 0.186 ms | **exceeds_limit** (4096 components) | **exceeds_limit** |
-| **LBS-pre** | **UBO (std140)** | 0.176 ms | 0.176 ms | 0.177 ms | 0.182 ms |
-| **LBS-pre** | **TBO (samplerBuffer)** | **0.078 ms** | **0.080 ms** | **0.080 ms** | **0.080 ms** |
-| **DQS-pre** | **Uniform Array** | 0.070 ms | 0.070 ms | **0.076 ms (FITS: 2048 comp.)** | **exceeds_limit** |
-| **DQS-pre** | **UBO (std140)** | 0.070 ms | 0.070 ms | 0.072 ms | 0.072 ms |
-| **DQS-pre** | **TBO (samplerBuffer)** | **0.078 ms** | **0.079 ms** | **0.080 ms** | **0.085 ms** |
+| **LBS-pre** | **UNIFORM** | 0.109 [0.078–0.112] + 0.0005 | 0.186 [0.186–0.187] + 0.0008 | **Exceeds Limit** | **Exceeds Limit** |
+| **LBS-pre** | **UBO** | 0.075 [0.074–0.076] + 0.0004 | 0.176 [0.176–0.176] + 0.0005 | 0.380 [0.380–0.393] + 0.0019 | 0.684 [0.684–0.685] + 0.0034 |
+| **LBS-pre** | **TBO** | 0.079 [0.078–0.080] + 0.0006 | 0.080 [0.076–0.080] + 0.0009 | 0.080 [0.076–0.081] + 0.0017 | 0.080 [0.080–0.080] + 0.0028 |
+| **DQS-pre** | **UNIFORM** | 0.070 [0.066–0.071] + 0.0002 | 0.071 [0.067–0.071] + 0.0005 | 0.131 [0.131–0.132] + 0.0011 | **Exceeds Limit** |
+| **DQS-pre** | **UBO** | 0.070 [0.068–0.070] + 0.0003 | 0.071 [0.070–0.071] + 0.0004 | 0.116 [0.110–0.117] + 0.0006 | 0.204 [0.204–0.205] + 0.0023 |
+| **DQS-pre** | **TBO** | 0.079 [0.078–0.080] + 0.0006 | 0.084 [0.084–0.085] + 0.0006 | 0.087 [0.081–0.089] + 0.0009 | 0.080 [0.076–0.086] + 0.0020 |
 
-#### Key Upload Path Findings:
-1. **Uniform Array Limits:** On this driver (`GL_MAX_VERTEX_UNIFORM_COMPONENTS = 4096`), LBS-pre exceeds the hardware uniform limit at 256 bones ($256 \times 16 = 4096$ components, leaving zero components for MVP matrices). DQS-pre requires only 8 components per bone ($256 \times 8 = 2048$ components), successfully fitting 256 bones into uniforms. Both exceed the limit at 512 bones.
-2. **UBO vs Uniform:** UBO (`std140`) allows scaling past 256 bones up to the 64 KB block size limit ($65,536 / 64 = 1,024$ matrices or $2,048$ dual quaternions).
-3. **Texture Buffer Objects (TBO):** TBO via `samplerBuffer` and `texelFetch` achieves high GPU vertex throughput and has effectively unlimited bone capacity ($268,435,456$ texels, accommodating over 67 million bones) with constant fetch latency regardless of bone palette scale.
+- **Experiment 2 vs Experiment 3 Agreement:** When evaluated with matching per-bone-count procedural meshes, the baseline configuration (99,852 vertices, 60 bones, 4 influences, uniform array) reproduces consistently across experiments within run-to-run variation: E2 measures **0.102 ms [0.096 – 0.112 ms]**, while E3 measures **0.109 ms [0.078 – 0.112 ms]**.
+- **Driver Limit Enforcement:** Uniform array skinning fails at 256 and 512 bones for LBS-pre (requiring 4,144 and 8,240 components, exceeding `GL_MAX_VERTEX_UNIFORM_COMPONENTS = 4,096`) and at 512 bones for DQS-pre (requiring 4,144 components). UBO and TBO scale to 512 bones without exceeding hardware capacities.
+
+
+### 6. Production Character Benchmark (`Woman.gltf`: 5,718 Vertices, 41 Joints / 43 Skeleton Nodes)
+
+> **Note on Joint Count:** The `Woman.gltf` skin specifies **41 joints**. The codebase's glTF loader (`LoadRestPose`) parses all 43 nodes in `data->nodes` into the runtime Skeleton pose (which includes 2 extra non-joint nodes: node 42 `Scene` armature root and mesh node).
+> **Indicative Timings Warning:** The measured GPU execution times for `Woman.gltf` range between 3.0 µs and 8.4 µs. These numbers approach the hardware timestamp granularity and API query latency of `GL_TIME_ELAPSED` (typically 1–3 µs) and should be interpreted as indicative only.
+
+| Variant | GPU Time (Median [Min – Max]) | CPU Palette (QPC) | Upload Time (QPC) |
+|---|---|---|---|
+| **LBS-naive** | 0.0084 ms [0.0069 – 0.0102] | 0.0248 ms | 0.0017 ms |
+| **LBS-pre** | 0.0041 ms [0.0040 – 0.0041] | 0.0275 ms | 0.0012 ms |
+| **DQS-naive** | 0.0050 ms [0.0045 – 0.0051] | 0.0293 ms | 0.0014 ms |
+| **DQS-pre** | 0.0033 ms [0.0030 – 0.0035] | 0.0358 ms | 0.0012 ms |
+
+
+## Known Caveats & Experimental Scope
+
+1. **Single GPU & Driver Architecture:** All benchmarks reflect execution on a single NVIDIA Ampere mobile workstation GPU (NVIDIA T1200 Laptop GPU, 4 GB GDDR6, Driver 610.60, Windows 10 Pro 25H2). Timings and cache thresholds may differ on AMD RDNA or Intel Arc architectures.
+2. **OpenGL 3.3 Core Profile:** Shaders are constrained to OpenGL 3.3 features (uniforms, uniform buffer objects, texture buffer objects). Newer techniques such as compute shader skinning and Shader Storage Buffer Objects (SSBOs, GL 4.3+) are outside the core sample profile.
+3. **Hardware Timer Query Granularity:** Hardware GPU timer queries (`GL_TIME_ELAPSED`) have a resolution floor of approximately 1–3 microseconds. For extremely lightweight meshes (< 10,000 vertices with rasterizer discard enabled), timings under 10 µs have higher relative measurement variance.
+4. **Synthetic Meshes & Linear Weight Falloff:** The procedural benchmark meshes use cylindrical geometry with linear weight falloff across bone segments. Production character models featuring complex skinning topologies and non-linear blend weights may experience different ALU and texture fetch patterns.
+
 
 ---
 

@@ -55,12 +55,18 @@ private:
     double ComputeVolume(const std::vector<vec3>& pos,
                           const std::vector<unsigned int>& idx) const;
 
-    // Per-slice mean radial distance (distance from bar long axis = X axis).
-    // Returns vector of (sliceX, distRatio) pairs.
-    struct SliceResult { float sliceX; float distRatio; };
+    // Per-slice metrics: rotation-invariant thickness and legacy axis distance.
+    struct SliceResult {
+        float sliceX;
+        float thicknessRatio;         // rotation-invariant thickness: mean dist from slice centroid / rest mean dist
+        float maxAxisDistRatioLegacy; // legacy radial distance from longitudinal X axis
+        bool isBlended;               // true if slice contains blended (skinned) vertices
+    };
     std::vector<SliceResult> ComputeSliceDistances(
         const std::vector<vec3>& skinnedPos,
         const std::vector<vec3>& restPos,
+        const std::vector<ivec4>& joints,
+        const std::vector<vec4>& weights,
         int numSlices = 32) const;
 
     // --- Pose construction ---
@@ -104,14 +110,17 @@ private:
         std::string motion;
         float angleDeg;
         double volumeRatio;
-        float maxDistRatio;
+        float minThicknessRatio;      // min thickness ratio over blended slices
+        float maxThicknessRatio;      // max thickness ratio over blended slices
+        float maxAxisDistRatioLegacy; // legacy max_dist_ratio
     };
     struct SliceRow {
         std::string method;
         std::string motion;
         float angleDeg;
         float sliceX;
-        float distRatio;
+        float thicknessRatio;
+        float maxAxisDistRatioLegacy;
     };
     std::vector<QualityRow> mQualityRows;
     std::vector<SliceRow>   mSliceRows;
