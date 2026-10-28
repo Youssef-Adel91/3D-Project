@@ -41,6 +41,13 @@ public:
 	std::vector<vec4>& GetWeights();
 	std::vector<ivec4>& GetInfluences();
 	std::vector<unsigned int>& GetIndices();
+
+	const std::vector<vec3>& GetPosition() const { return mPosition; }
+	const std::vector<vec3>& GetNormal() const { return mNormal; }
+	const std::vector<vec2>& GetTexCoord() const { return mTexCoord; }
+	const std::vector<vec4>& GetWeights() const { return mWeights; }
+	const std::vector<ivec4>& GetInfluences() const { return mInfluences; }
+	const std::vector<unsigned int>& GetIndices() const { return mIndices; }
 	void CPUSkin(Skeleton& skeleton, Pose& pose);
 	void CPUSkin(std::vector<mat4>& animated);
 	void UpdateOpenGLBuffers();

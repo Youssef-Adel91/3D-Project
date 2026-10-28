@@ -132,6 +132,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Code\Attribute.cpp" />
+    <ClCompile Include="Code\BenchMesh.cpp" />
     <ClCompile Include="Code\Blending.cpp" />
     <ClCompile Include="Code\CCDSolver.cpp" />
     <ClCompile Include="Code\cgltf.c" />
@@ -139,9 +140,13 @@
     <ClCompile Include="Code\CrossFadeController.cpp" />
     <ClCompile Include="Code\Draw.cpp" />
     <ClCompile Include="Code\DualQuaternion.cpp" />
+    <ClCompile Include="Code\Experiment1.cpp" />
+    <ClCompile Include="Code\Experiment2.cpp" />
+    <ClCompile Include="Code\Experiment3.cpp" />
     <ClCompile Include="Code\FABRIKSolver.cpp" />
     <ClCompile Include="Code\glad.c" />
     <ClCompile Include="Code\GLTFLoader.cpp" />
+    <ClCompile Include="Code\GLTimer.cpp" />
     <ClCompile Include="Code\IndexBuffer.cpp" />
     <ClCompile Include="Code\mat4.cpp" />
     <ClCompile Include="Code\Mesh.cpp" />
@@ -163,6 +168,7 @@
   <ItemGroup>
     <ClInclude Include="Code\Application.h" />
     <ClInclude Include="Code\Attribute.h" />
+    <ClInclude Include="Code\BenchMesh.h" />
     <ClInclude Include="Code\Blending.h" />
     <ClInclude Include="Code\CCDSolver.h" />
     <ClInclude Include="Code\cgltf.h" />
@@ -171,10 +177,14 @@
     <ClInclude Include="Code\CrossFadeTarget.h" />
     <ClInclude Include="Code\Draw.h" />
     <ClInclude Include="Code\DualQuaternion.h" />
+    <ClInclude Include="Code\Experiment1.h" />
+    <ClInclude Include="Code\Experiment2.h" />
+    <ClInclude Include="Code\Experiment3.h" />
     <ClInclude Include="Code\FABRIKSolver.h" />
     <ClInclude Include="Code\Frame.h" />
     <ClInclude Include="Code\glad.h" />
     <ClInclude Include="Code\GLTFLoader.h" />
+    <ClInclude Include="Code\GLTimer.h" />
     <ClInclude Include="Code\IndexBuffer.h" />
     <ClInclude Include="Code\Interpolation.h" />
     <ClInclude Include="Code\khrplatform.h" />
@@ -197,10 +207,17 @@
     <ClInclude Include="Code\vec4.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Shaders\dqs_pre.vert" />
+    <None Include="Shaders\dqs_pre_tbo.vert" />
+    <None Include="Shaders\dqs_pre_ubo.vert" />
     <None Include="Shaders\dualquaternion.vert" />
+    <None Include="Shaders\dualquaternion_tf.vert" />
     <None Include="Shaders\lit.frag" />
     <None Include="Shaders\preskinned.vert" />
+    <None Include="Shaders\preskinned_tbo.vert" />
+    <None Include="Shaders\preskinned_ubo.vert" />
     <None Include="Shaders\skinned.vert" />
+    <None Include="Shaders\skinned_tf.vert" />
     <None Include="Shaders\static.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

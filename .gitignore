@@ -1,0 +1,24 @@
+# Visual Studio build artifacts
+x64/
+Debug/
+Release/
+*.obj
+*.pdb
+*.tlog
+*.idb
+*.ilk
+*.iobj
+*.ipdb
+*.log
+*.lastbuildstate
+*.exp
+*.lib
+Sample.exe
+.vs/
+*.opensdf
+*.sdf
+
+# External cloned upstream repository and scratch
+GameAnimationProgramming/
+scratch/
+

@@ -1,5 +1,9 @@
 #version 330 core
 
+#ifndef INFLUENCES
+#define INFLUENCES 4
+#endif
+
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
@@ -69,15 +73,32 @@ vec4 transformPoint(mat2x4 dq, vec3 v) {
 void main() {
     vec4 w = weights;
     // Neighborhood all of the quaternions correctly
+#if INFLUENCES >= 2
     if (dot(pose[joints.x][0], pose[joints.y][0]) < 0.0) { w.y *= -1.0; }
+#endif
+#if INFLUENCES >= 3
     if (dot(pose[joints.x][0], pose[joints.z][0]) < 0.0) { w.z *= -1.0; }
+#endif
+#if INFLUENCES >= 4
     if (dot(pose[joints.x][0], pose[joints.w][0]) < 0.0) { w.w *= -1.0; }
+#endif
+
     // Combine
     mat2x4 dq0 = combineDq(invBindPose[joints.x], pose[joints.x]);
+    mat2x4 skinDq = w.x * dq0;
+#if INFLUENCES >= 2
     mat2x4 dq1 = combineDq(invBindPose[joints.y], pose[joints.y]);
+    skinDq += w.y * dq1;
+#endif
+#if INFLUENCES >= 3
     mat2x4 dq2 = combineDq(invBindPose[joints.z], pose[joints.z]);
+    skinDq += w.z * dq2;
+#endif
+#if INFLUENCES >= 4
     mat2x4 dq3 = combineDq(invBindPose[joints.w], pose[joints.w]);
-    mat2x4 skinDq = w.x * dq0 + w.y * dq1 + w.z * dq2 +  w.w * dq3;
+    skinDq += w.w * dq3;
+#endif
+
     skinDq = normalizeDq(skinDq);
     vec4 v = transformPoint(skinDq, position);
     gl_Position = projection * view * model * v;

@@ -27,6 +27,9 @@ public:
 	~Shader();
 
 	void Load(const std::string& vertex, const std::string& fragment);
+	// For transform feedback: set varyings before linking
+	void LoadWithTF(const std::string& vertex, const std::string& fragment,
+	                const char* const* varyings, int numVaryings);
 
 	void Bind();
 	void UnBind();

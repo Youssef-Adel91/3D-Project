@@ -174,6 +174,48 @@ void Shader::Load(const std::string& vertex, const std::string& fragment) {
 	}
 }
 
+void Shader::LoadWithTF(const std::string& vertex, const std::string& fragment,
+                         const char* const* varyings, int numVaryings) {
+	std::ifstream f(vertex.c_str());
+	bool vertFile = f.good();
+	f.close();
+
+	std::string v_source = vertex;
+	if (vertFile) { v_source = ReadFile(vertex); }
+
+	std::string f_source = fragment;
+	std::ifstream ff(fragment.c_str());
+	if (ff.good()) { f_source = ReadFile(fragment); }
+	ff.close();
+
+	unsigned int v_shader = CompileVertexShader(v_source);
+	unsigned int f_shader = CompileFragmentShader(f_source);
+
+	glAttachShader(mHandle, v_shader);
+	glAttachShader(mHandle, f_shader);
+
+	// Set transform feedback varyings BEFORE linking
+	glTransformFeedbackVaryings(mHandle, numVaryings, varyings, GL_INTERLEAVED_ATTRIBS);
+
+	glLinkProgram(mHandle);
+	int success = 0;
+	glGetProgramiv(mHandle, GL_LINK_STATUS, &success);
+	if (!success) {
+		char infoLog[512];
+		glGetProgramInfoLog(mHandle, 512, NULL, infoLog);
+		std::cout << "ERROR: TF Shader linking failed.\n";
+		std::cout << "\t" << infoLog << "\n";
+	}
+
+	glDeleteShader(v_shader);
+	glDeleteShader(f_shader);
+
+	if (success) {
+		PopulateAttributes();
+		PopulateUniforms();
+	}
+}
+
 void Shader::Bind() {
 	glUseProgram(mHandle);
 }
