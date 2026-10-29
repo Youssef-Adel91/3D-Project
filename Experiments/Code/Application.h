@@ -13,6 +13,7 @@ public:
 	inline virtual void Update(float inDeltaTime) { }
 	inline virtual void Render(float inAspectRatio) { }
 	inline virtual void Shutdown() { }
+	inline virtual void OnKeyDown(int inKey) { }
 };
 
 #endif
