@@ -396,7 +396,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     bool runE2 = (cmd.find("--e2") != std::string::npos) || (cmd.find("--all") != std::string::npos);
     bool runE3 = (cmd.find("--e3") != std::string::npos) || (cmd.find("--all") != std::string::npos);
     bool runScreenshots = (cmd.find("--screenshots") != std::string::npos) || (cmd.find("--all") != std::string::npos);
-    bool isInteractive = (!runE1 && !runE2 && !runE3 && !runScreenshots) || (cmd.find("--interactive") != std::string::npos);
+    bool runDeadCode = (cmd.find("--dead-code") != std::string::npos);
+    bool isInteractive = (!runE1 && !runE2 && !runE3 && !runScreenshots && !runDeadCode) || (cmd.find("--interactive") != std::string::npos);
 
     WNDCLASSEX wndclass;
     wndclass.cbSize = sizeof(WNDCLASSEX);
@@ -514,6 +515,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
         if (e3.Initialize()) {
             e3.Run();
             e3.Shutdown();
+        }
+    }
+
+    if (runDeadCode) {
+        Experiment2 e2;
+        if (e2.Initialize()) {
+            e2.RunDeadCodeBenchmark();
+            e2.Shutdown();
         }
     }
 

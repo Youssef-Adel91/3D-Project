@@ -13,7 +13,7 @@ void main() {
 	vec4 diffuseColor = texture(tex0, uv);
 
 	vec3 n = normalize(norm);
-	vec3 l = normalize(light);
+	vec3 l = normalize(light - fragPos);
 	float diffuseIntensity = clamp(dot(n, l) + 0.1, 0, 1);
 
 	FragColor = diffuseColor * diffuseIntensity;

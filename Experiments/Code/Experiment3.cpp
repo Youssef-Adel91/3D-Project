@@ -407,6 +407,7 @@ void Experiment3::Run() {
     }
 
     WriteCSV("Results/e3_path.csv");
+    WriteCSV("Results_fixed/e3_path.csv");
     WriteCSV("e3_path.csv");
     std::cout << "[E3] Done.\n";
 }
