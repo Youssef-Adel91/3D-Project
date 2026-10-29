@@ -18,6 +18,7 @@
 #include "Application.h"
 #include "Sample.h"
 #include "Experiment1.h"
+#include "Experiment1b.h"
 #include "Experiment2.h"
 #include "Experiment3.h"
 #include "GLTFLoader.h"
@@ -392,11 +393,12 @@ static void CaptureScreenshots(HDC hdc, int width, int height) {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow) {
     std::string cmd = szCmdLine ? szCmdLine : "";
-    bool runE1 = (cmd.find("--e1") != std::string::npos) || (cmd.find("--all") != std::string::npos);
+    bool runE1 = ((cmd.find("--e1") != std::string::npos && cmd.find("--e1b") == std::string::npos) || (cmd.find("--all") != std::string::npos));
+    bool runE1b = (cmd.find("--e1b") != std::string::npos);
     bool runE2 = (cmd.find("--e2") != std::string::npos) || (cmd.find("--all") != std::string::npos);
     bool runE3 = (cmd.find("--e3") != std::string::npos) || (cmd.find("--all") != std::string::npos);
     bool runScreenshots = (cmd.find("--screenshots") != std::string::npos) || (cmd.find("--all") != std::string::npos);
-    bool isInteractive = (!runE1 && !runE2 && !runE3 && !runScreenshots) || (cmd.find("--interactive") != std::string::npos);
+    bool isInteractive = (!runE1 && !runE1b && !runE2 && !runE3 && !runScreenshots) || (cmd.find("--interactive") != std::string::npos);
 
     WNDCLASSEX wndclass;
     wndclass.cbSize = sizeof(WNDCLASSEX);
@@ -498,6 +500,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
         if (e1.Initialize()) {
             e1.Run();
             e1.Shutdown();
+        }
+    }
+
+    if (runE1b) {
+        Experiment1b e1b;
+        if (e1b.Initialize()) {
+            e1b.Run();
+            e1b.Shutdown();
         }
     }
 

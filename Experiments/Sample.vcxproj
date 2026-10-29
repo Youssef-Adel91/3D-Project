@@ -141,6 +141,7 @@
     <ClCompile Include="Code\Draw.cpp" />
     <ClCompile Include="Code\DualQuaternion.cpp" />
     <ClCompile Include="Code\Experiment1.cpp" />
+    <ClCompile Include="Code\Experiment1b.cpp" />
     <ClCompile Include="Code\Experiment2.cpp" />
     <ClCompile Include="Code\Experiment3.cpp" />
     <ClCompile Include="Code\FABRIKSolver.cpp" />
@@ -178,6 +179,7 @@
     <ClInclude Include="Code\Draw.h" />
     <ClInclude Include="Code\DualQuaternion.h" />
     <ClInclude Include="Code\Experiment1.h" />
+    <ClInclude Include="Code\Experiment1b.h" />
     <ClInclude Include="Code\Experiment2.h" />
     <ClInclude Include="Code\Experiment3.h" />
     <ClInclude Include="Code\FABRIKSolver.h" />
