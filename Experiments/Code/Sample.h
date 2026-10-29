@@ -77,6 +77,7 @@ public:
     void SetBarBend(float deg);
     void SetWomanTime(float t);
     void SetModel(VisualModel model);
+    void DiagnoseWomanDQS();
 
 private:
     Pose BuildBarPose(float deg, VisualMotion motion);

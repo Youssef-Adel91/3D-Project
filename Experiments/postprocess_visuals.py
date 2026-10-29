@@ -66,20 +66,24 @@ def annotate_image(img_path, title_text, out_png_path):
     # 3. Right label: "DQS (Dual Quaternion)"
     draw_pill(draw, half_w + 24, 22, "DQS (Dual Quaternion)", font_label, bg_color=(34, 139, 34, 220))
 
-    # 4. Center Title Badge
+    # 4. Center Title Badge (Row 2, placed cleanly below Row 1 badges to avoid any overlap)
     bbox = font_title.getbbox(title_text)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
     pill_w = tw + 32
     pill_h = th + 14
     cx = (w - pill_w) // 2
-    draw.rounded_rectangle([cx, 22, cx + pill_w, 22 + pill_h], radius=pill_h//2,
+    draw.rounded_rectangle([cx, 64, cx + pill_w, 64 + pill_h], radius=pill_h//2,
                            fill=(15, 18, 24, 230), outline=(255, 255, 255, 90), width=1)
-    draw.text((cx + 16 - bbox[0], 22 + 7 - bbox[1]), title_text, font=font_title, fill=(255, 255, 255, 255))
+    draw.text((cx + 16 - bbox[0], 64 + 7 - bbox[1]), title_text, font=font_title, fill=(255, 255, 255, 255))
 
-    # 5. Bottom comparison notes
-    lbs_note = "Candy-wrapper volume loss" if "Twist" in title_text else "Joint collapse / pinching" if "Bend" in title_text else "Classical linear blending"
-    dqs_note = "Volume preserved (rigid rotation)" if "Twist" in title_text else "Bulging preserved" if "Bend" in title_text else "Dual quaternion blending"
+    # 5. Bottom comparison notes (strictly neutral, reporting only directly observed & measured behavior)
+    if "Twist" in title_text or "Bend" in title_text:
+        lbs_note = "Volume loss at the joint"
+        dqs_note = "Volume retained"
+    else:
+        lbs_note = "Linear Blend Skinning (LBS)"
+        dqs_note = "Dual Quaternion Skinning (DQS)"
 
     draw_pill(draw, 24, h - 46, lbs_note, font_sub, bg_color=(10, 12, 16, 190), fg_color=(230, 230, 230, 230), pad_x=10, pad_y=4)
     draw_pill(draw, half_w + 24, h - 46, dqs_note, font_sub, bg_color=(10, 12, 16, 190), fg_color=(230, 230, 230, 230), pad_x=10, pad_y=4)
@@ -130,9 +134,9 @@ def annotate_video_frame(b_path, title_prefix, current_str):
     pill_w = tw + 28
     pill_h = th + 12
     cx = (w - pill_w) // 2
-    draw.rounded_rectangle([cx, 20, cx + pill_w, 20 + pill_h], radius=pill_h//2,
+    draw.rounded_rectangle([cx, 64, cx + pill_w, 64 + pill_h], radius=pill_h//2,
                            fill=(15, 18, 24, 230), outline=(255, 255, 255, 90), width=1)
-    draw.text((cx + 14 - bbox[0], 20 + 6 - bbox[1]), title_text, font=font_title, fill=(255, 255, 255, 255))
+    draw.text((cx + 14 - bbox[0], 64 + 6 - bbox[1]), title_text, font=font_title, fill=(255, 255, 255, 255))
 
     final_img = Image.alpha_composite(im, overlay).convert("RGB")
     png_path = os.path.splitext(b_path)[0] + ".png"

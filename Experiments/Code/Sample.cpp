@@ -87,6 +87,9 @@ void Sample::Initialize() {
 }
 
 Pose Sample::BuildBarPose(float deg, VisualMotion motion) {
+    if (deg > 179.99f && motion == MOTION_TWIST) {
+        deg = 179.99f;
+    }
     Pose pose = mSkeletonBar.GetRestPose();
     float rad = (float)(deg * M_PI / 180.0);
     Transform local = pose.GetLocalTransform(0);
@@ -219,8 +222,13 @@ void Sample::RenderSplit(int width, int height) {
     Texture* pTexture = nullptr;
 
     if (mModelMode == VISUAL_BAR) {
-        // 3/4 angle view for bar
-        view = lookAt(vec3(7.5f, 4.5f, 9.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+        if (mMotionMode == MOTION_BEND) {
+            // Perpendicular side-view along Z axis: directly displays X-Y bending profile & joint pinching
+            view = lookAt(vec3(0.0f, 1.8f, 11.0f), vec3(0.0f, 1.2f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+        } else {
+            // 3/4 angle view for bar twist
+            view = lookAt(vec3(7.5f, 4.5f, 9.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+        }
         pMeshes = &mMeshesBar;
         pTexture = mTextureBar;
 
@@ -245,11 +253,26 @@ void Sample::RenderSplit(int width, int height) {
         pose.GetMatrixPalette(posePaletteLBS);
         invBindLBS = mSkeletonWoman.GetInvBindPose();
 
-        pose.GetDualQuaternionPalette(posePaletteDQS);
-        mSkeletonWoman.GetInvBindPose(invBindDQS);
+        // Woman DQS: precompute combined dual quaternions from the combined skinning matrix (pose * invBind).
+        // In Woman.gltf, the Armature root node has scale [0.01, 0.01, 0.01] and invBind has scale 100.
+        // Multiplying the matrices cancels the scale (0.01 * 100 = 1.0) into a pure rigid transform.
+        posePaletteDQS.resize(posePaletteLBS.size());
+        invBindDQS.resize(posePaletteLBS.size());
+        for (size_t i = 0; i < posePaletteLBS.size(); ++i) {
+            mat4 comb = posePaletteLBS[i] * invBindLBS[i];
+            posePaletteDQS[i] = transformToDualQuat(mat4ToTransform(comb));
+            invBindDQS[i] = DualQuaternion(); // Identity dual quaternion
+        }
     }
 
     if (!pMeshes || pMeshes->empty()) return;
+
+    // Enable depth test so polygons are properly z-buffered
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
+    // Disable face culling so twisted/sheared triangles render cleanly without holes
+    glDisable(GL_CULL_FACE);
 
     vec3 lightDir = normalized(vec3(0.5f, 0.8f, 0.7f));
 
@@ -333,4 +356,201 @@ void Sample::Shutdown() {
     mMeshesBar.clear();
     mMeshesWoman.clear();
     mClipsWoman.clear();
+}
+
+void Sample::DiagnoseWomanDQS() {
+    std::cout << "\n=======================================================\n";
+    std::cout << "           DIAGNOSTIC: WOMAN DQS vs LBS SKINNING        \n";
+    std::cout << "=======================================================\n";
+
+    if (mMeshesWoman.empty()) {
+        std::cout << "[Diagnose] ERROR: Woman meshes empty!\n";
+        return;
+    }
+
+    int numNodes = (int)mSkeletonWoman.GetRestPose().Size();
+    std::cout << "[Diagnose] Skeleton nodes count: " << numNodes << "\n";
+
+    // 1. Joint index range check in mesh influences
+    int minJoint = 999999, maxJoint = -999999;
+    size_t totalVerts = 0;
+    float yMin = 1e9f, yMax = -1e9f;
+
+    for (const auto& mesh : mMeshesWoman) {
+        const auto& pos = mesh.GetPosition();
+        const auto& j   = mesh.GetInfluences();
+        const auto& w   = mesh.GetWeights();
+        for (size_t i = 0; i < pos.size(); ++i) {
+            totalVerts++;
+            if (pos[i].y < yMin) yMin = pos[i].y;
+            if (pos[i].y > yMax) yMax = pos[i].y;
+
+            if (j[i].x < minJoint) minJoint = j[i].x;
+            if (j[i].x > maxJoint) maxJoint = j[i].x;
+            if (j[i].y < minJoint) minJoint = j[i].y;
+            if (j[i].y > maxJoint) maxJoint = j[i].y;
+            if (j[i].z < minJoint) minJoint = j[i].z;
+            if (j[i].z > maxJoint) maxJoint = j[i].z;
+            if (j[i].w < minJoint) minJoint = j[i].w;
+            if (j[i].w > maxJoint) maxJoint = j[i].w;
+        }
+    }
+    float charHeight = yMax - yMin;
+    std::cout << "[Diagnose] Total vertices: " << totalVerts << "\n";
+    std::cout << "[Diagnose] Rest character height: " << charHeight << " units (y: " << yMin << " to " << yMax << ")\n";
+    std::cout << "[Diagnose] Joint index range in mesh: [" << minJoint << ", " << maxJoint << "]\n";
+
+    // Walking pose at t = 0.5s
+    Pose pose = mSkeletonWoman.GetRestPose();
+    if (!mClipsWoman.empty()) {
+        mClipsWoman[0].Sample(pose, 0.5f);
+    }
+
+    // LBS Palette
+    std::vector<mat4> lbsPosePalette;
+    pose.GetMatrixPalette(lbsPosePalette);
+    std::vector<mat4> lbsInvBind = mSkeletonWoman.GetInvBindPose();
+
+    // DQS Palette
+    std::vector<DualQuaternion> dqsPosePalette;
+    pose.GetDualQuaternionPalette(dqsPosePalette);
+    std::vector<DualQuaternion> dqsInvBind;
+    mSkeletonWoman.GetInvBindPose(dqsInvBind);
+
+    std::cout << "[Diagnose] LBS posePalette size: " << lbsPosePalette.size()
+              << ", invBind size: " << lbsInvBind.size() << "\n";
+    std::cout << "[Diagnose] DQS posePalette size: " << dqsPosePalette.size()
+              << ", invBind size: " << dqsInvBind.size() << "\n";
+
+    // Helper: combineDQ
+    auto combineDQ = [](const DualQuaternion& inv, const DualQuaternion& p) -> DualQuaternion {
+        DualQuaternion l = normalized(inv);
+        DualQuaternion r = normalized(p);
+        quat real = l.real * r.real;
+        quat dual = l.real * r.dual + l.dual * r.real;
+        return DualQuaternion(real, dual);
+    };
+
+    // Test Method A: hemisphere on pose (naive dualquaternion.vert style)
+    // Test Method B: hemisphere on combined DQ (dqs_pre style)
+    double maxDistA = 0.0, sumDistA = 0.0;
+    int nanCountA = 0, infCountA = 0, hugeCountA = 0;
+
+    double maxDistB = 0.0, sumDistB = 0.0;
+    int nanCountB = 0, infCountB = 0, hugeCountB = 0;
+
+    double maxDistC = 0.0, sumDistC = 0.0;
+
+    for (const auto& mesh : mMeshesWoman) {
+        const auto& positions  = mesh.GetPosition();
+        const auto& joints     = mesh.GetInfluences();
+        const auto& weights    = mesh.GetWeights();
+
+        for (size_t i = 0; i < positions.size(); ++i) {
+            const vec3& p = positions[i];
+            const ivec4& j = joints[i];
+            const vec4& w = weights[i];
+
+            // CPU LBS
+            mat4 skinLBS = (lbsPosePalette[j.x] * lbsInvBind[j.x]) * w.x
+                         + (lbsPosePalette[j.y] * lbsInvBind[j.y]) * w.y
+                         + (lbsPosePalette[j.z] * lbsInvBind[j.z]) * w.z
+                         + (lbsPosePalette[j.w] * lbsInvBind[j.w]) * w.w;
+            vec3 pLBS = transformPoint(skinLBS, p);
+
+            // CPU DQS Method A (hemisphere check on pose - naive dualquaternion.vert)
+            {
+                vec4 wA = w;
+                if (dot(dqsPosePalette[j.x].real, dqsPosePalette[j.y].real) < 0.0f) wA.y *= -1.0f;
+                if (dot(dqsPosePalette[j.x].real, dqsPosePalette[j.z].real) < 0.0f) wA.z *= -1.0f;
+                if (dot(dqsPosePalette[j.x].real, dqsPosePalette[j.w].real) < 0.0f) wA.w *= -1.0f;
+
+                DualQuaternion dq0 = combineDQ(dqsInvBind[j.x], dqsPosePalette[j.x]);
+                DualQuaternion dq1 = combineDQ(dqsInvBind[j.y], dqsPosePalette[j.y]);
+                DualQuaternion dq2 = combineDQ(dqsInvBind[j.z], dqsPosePalette[j.z]);
+                DualQuaternion dq3 = combineDQ(dqsInvBind[j.w], dqsPosePalette[j.w]);
+
+                DualQuaternion skinA = dq0 * wA.x + dq1 * wA.y + dq2 * wA.z + dq3 * wA.w;
+                float magA = len(skinA.real);
+                if (std::isnan(magA)) nanCountA++;
+                else if (magA < 1e-6f) infCountA++;
+                else {
+                    normalize(skinA);
+                    vec3 pA = transformPoint(skinA, p);
+                    double d = len(pA - pLBS);
+                    if (d > 100.0) hugeCountA++;
+                    if (d > maxDistA) maxDistA = d;
+                    sumDistA += d;
+                }
+            }
+
+            // CPU DQS Method B (hemisphere check on combined DQ - dqs_pre style)
+            {
+                DualQuaternion dq0 = combineDQ(dqsInvBind[j.x], dqsPosePalette[j.x]);
+                DualQuaternion dq1 = combineDQ(dqsInvBind[j.y], dqsPosePalette[j.y]);
+                DualQuaternion dq2 = combineDQ(dqsInvBind[j.z], dqsPosePalette[j.z]);
+                DualQuaternion dq3 = combineDQ(dqsInvBind[j.w], dqsPosePalette[j.w]);
+
+                vec4 wB = w;
+                if (dot(dq0.real, dq1.real) < 0.0f) wB.y *= -1.0f;
+                if (dot(dq0.real, dq2.real) < 0.0f) wB.z *= -1.0f;
+                if (dot(dq0.real, dq3.real) < 0.0f) wB.w *= -1.0f;
+
+                DualQuaternion skinB = dq0 * wB.x + dq1 * wB.y + dq2 * wB.z + dq3 * wB.w;
+                float magB = len(skinB.real);
+                if (std::isnan(magB)) nanCountB++;
+                else if (magB < 1e-6f) infCountB++;
+                else {
+                    normalize(skinB);
+                    vec3 pB = transformPoint(skinB, p);
+                    double d = len(pB - pLBS);
+                    if (d > 100.0) hugeCountB++;
+                    if (d > maxDistB) maxDistB = d;
+                    sumDistB += d;
+                }
+            }
+
+            // CPU DQS Method C: convert combined matrix (pose * invBind) to DualQuaternion
+            // Since pose * invBind has net scale 1.0 (0.01 * 100 cancels out)
+            {
+                mat4 m0 = lbsPosePalette[j.x] * lbsInvBind[j.x];
+                mat4 m1 = lbsPosePalette[j.y] * lbsInvBind[j.y];
+                mat4 m2 = lbsPosePalette[j.z] * lbsInvBind[j.z];
+                mat4 m3 = lbsPosePalette[j.w] * lbsInvBind[j.w];
+
+                DualQuaternion dq0 = transformToDualQuat(mat4ToTransform(m0));
+                DualQuaternion dq1 = transformToDualQuat(mat4ToTransform(m1));
+                DualQuaternion dq2 = transformToDualQuat(mat4ToTransform(m2));
+                DualQuaternion dq3 = transformToDualQuat(mat4ToTransform(m3));
+
+                vec4 wC = w;
+                if (dot(dq0.real, dq1.real) < 0.0f) wC.y *= -1.0f;
+                if (dot(dq0.real, dq2.real) < 0.0f) wC.z *= -1.0f;
+                if (dot(dq0.real, dq3.real) < 0.0f) wC.w *= -1.0f;
+
+                DualQuaternion skinC = dq0 * wC.x + dq1 * wC.y + dq2 * wC.z + dq3 * wC.w;
+                normalize(skinC);
+                vec3 pC = transformPoint(skinC, p);
+                double d = len(pC - pLBS);
+                if (d > maxDistC) maxDistC = d;
+                sumDistC += d;
+            }
+        }
+    }
+
+    std::cout << std::fixed << std::setprecision(5);
+    std::cout << "[Diagnose] Method A (hemisphere on pose): NaN=" << nanCountA
+              << ", Inf=" << infCountA << ", Huge(>100u)=" << hugeCountA
+              << ", maxDist=" << maxDistA << " (" << (maxDistA / charHeight)*100.0 << "% of height)"
+              << ", meanDist=" << (sumDistA / totalVerts) << " (" << (sumDistA / totalVerts / charHeight)*100.0 << "% of height)\n";
+
+    std::cout << "[Diagnose] Method B (hemisphere on combined DQ): NaN=" << nanCountB
+              << ", Inf=" << infCountB << ", Huge(>100u)=" << hugeCountB
+              << ", maxDist=" << maxDistB << " (" << (maxDistB / charHeight)*100.0 << "% of height)"
+              << ", meanDist=" << (sumDistB / totalVerts) << " (" << (sumDistB / totalVerts / charHeight)*100.0 << "% of height)\n";
+
+    std::cout << "[Diagnose] Method C (combined animated M_i -> DQ): "
+              << "maxDist=" << maxDistC << " (" << (maxDistC / charHeight)*100.0 << "% of height)"
+              << ", meanDist=" << (sumDistC / totalVerts) << " (" << (sumDistC / totalVerts / charHeight)*100.0 << "% of height)\n";
+    std::cout << "=======================================================\n\n";
 }
