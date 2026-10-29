@@ -1,0 +1,110 @@
+================================================================================
+TRACEABILITY OF ALL PAPER NUMBERS TO EXPERIMENT CSVs
+================================================================================
+
+1. EXPERIMENT 1: DEFORMATION QUALITY (dq.gltf bar)
+--------------------------------------------------------------------------------
+Source file: Experiments\Results\e1_quality.csv
+
+Motion   Angle    LBS Vol      LBS MinThick   DQS Vol      DQS MinThick  
+------------------------------------------------------------------------
+Twist    90       0.920188     0.730996       0.999774     0.999999      
+Twist    120      0.879562     0.549094       0.998673     1.000000      
+Twist    180      0.838106     0.261520       0.994269     1.000000      
+Bend     90       0.957986     0.869104       0.997026     0.999903      
+Bend     120      0.936980     0.786530       0.994534     0.999882      
+
+2. EXPERIMENT 1b: SENSITIVITY TO WEIGHT SMOOTHNESS W (Twist 180 deg)
+--------------------------------------------------------------------------------
+Source file: Experiments\Results\e1b_quality.csv
+
+W        LBS Vol      Analytical (1 - W/15)    Diff (LBS - Form)    DQS Vol      DQS MinThick  
+--------------------------------------------------------------------------------------------
+0.25     0.978494     0.983333                 -0.004839            0.978495     1.000000      
+0.50     0.952032     0.966667                 -0.014635            0.978448     1.000000      
+1.00     0.931377     0.933333                 -0.001956            0.981323     1.000000      
+2.00     0.861994     0.866667                 -0.004673            0.988249     1.000000      
+4.00     0.731230     0.733333                 -0.002103            0.992116     1.000000      
+8.00     0.466210     0.466667                 -0.000457            0.994227     1.000000      
+
+3. EXPERIMENT 2: GPU TIMINGS (60 Bones, 4 Influences)
+--------------------------------------------------------------------------------
+Source file: Experiments\Results\e2_gpu.csv
+
+Table 3a: GPU Time (ms) by Vertex Count at 60 Bones, 4 Influences:
+Variant      9,996 Vertices           99,852 Vertices          999,996 Vertices        
+--------------------------------------------------------------------------------------
+LBS-naive    0.063 [0.063-0.063]      0.365 [0.357-0.379]      2.158 [2.104-2.169]     
+LBS-pre      0.014 [0.014-0.015]      0.102 [0.096-0.112]      0.932 [0.876-0.939]     
+DQS-naive    0.014 [0.012-0.014]      0.132 [0.129-0.138]      1.060 [1.042-1.064]     
+DQS-pre      0.006 [0.006-0.006]      0.090 [0.079-0.096]      0.913 [0.887-0.922]     
+
+Table 3b: Bone-Count Scaling at 99,852 Vertices, 4 Influences (median ms across 5 runs):
+Variant         20 bones    43 bones    60 bones   120 bones
+------------------------------------------------------------
+LBS-naive         0.1085         nan      0.3651      0.6939
+LBS-pre           0.0860         nan      0.1024      0.2237
+DQS-naive         0.0968         nan      0.1321      0.2123
+DQS-pre           0.0842         nan      0.0895      0.0960
+
+4. CPU PALETTE & UPLOAD TIMES (Microseconds)
+--------------------------------------------------------------------------------
+Variant      Bones    CPU Palette (us)     GPU Upload (us)     
+--------------------------------------------------------------
+LBS-pre      20       2.20                 0.60                
+DQS-pre      20       2.73                 0.61                
+LBS-pre      60       6.17                 0.90                
+DQS-pre      60       8.35                 0.75                
+LBS-pre      120      15.29                2.66                
+DQS-pre      120      16.79                1.13                
+
+5. EXPERIMENT 3: UPLOAD PATHS (Uniform vs UBO vs TBO)
+--------------------------------------------------------------------------------
+Source file: Experiments\Results\e3_path.csv
+
+Variant    Bones    Uniform (ms)     UBO (ms)         TBO (ms)        
+--------------------------------------------------------------------
+LBS-pre    60       0.1093          0.0750          0.0795         
+LBS-pre    120      0.1864          0.1761          0.0799         
+LBS-pre    256      limit           0.3798          0.0799         
+LBS-pre    512      limit           0.6840          0.0800         
+DQS-pre    60       0.0696          0.0696          0.0791         
+DQS-pre    120      0.0705          0.0708          0.0844         
+DQS-pre    256      0.1312          0.1157          0.0870         
+DQS-pre    512      limit           0.2042          0.0802         
+
+6. 60 FPS FRAME BUDGET TABLE (16.667 ms budget)
+--------------------------------------------------------------------------------
+Configuration                          Time (ms)    % of 16.667 ms Budget   
+----------------------------------------------------------------------------
+LBS-naive at 99,852 verts (60 bones)   0.365        2.19                    %
+LBS-pre at 99,852 verts (60 bones)     0.102        0.61                    %
+DQS-naive at 99,852 verts (60 bones)   0.132        0.79                    %
+DQS-pre at 99,852 verts (60 bones)     0.090        0.54                    %
+LBS-naive at 999,996 verts (60 bones)  2.158        12.95                   %
+LBS-pre at 999,996 verts (60 bones)    0.932        5.59                    %
+DQS-naive at 999,996 verts (60 bones)  1.060        6.36                    %
+DQS-pre at 999,996 verts (60 bones)    0.913        5.48                    %
+
+7. COMPARISON WITH CITED PAPER VALUES
+--------------------------------------------------------------------------------
+Metric / Claim                             Cited in Paper   CSV Value      Difference   Diff > Tol? 
+------------------------------------------------------------------------------------------------
+E1 Twist 180 LBS Volume Ratio              0.838            0.838106       +0.000106    MATCH       
+E1 Twist 180 DQS Volume Ratio              0.994            0.994269       +0.000269    MATCH       
+E2 99,852 verts LBS-naive (ms)             0.365            0.3651         +0.0001      MATCH       
+E2 99,852 verts LBS-pre (ms)               0.102            0.1024         +0.0004      MATCH       
+E2 99,852 verts DQS-naive (ms)             0.132            0.1321         +0.0001      MATCH       
+E2 99,852 verts DQS-pre (ms)               0.090            0.0895         -0.0005      MATCH       
+E2 999,996 verts LBS-naive (ms)            2.158            2.1584         +0.0004      MATCH       
+E2 999,996 verts LBS-pre (ms)              0.932            0.9321         +0.0001      MATCH       
+E2 999,996 verts DQS-naive (ms)            1.060            1.0595         -0.0005      MATCH       
+E2 999,996 verts DQS-pre (ms)              0.913            0.9134         +0.0004      MATCH       
+E3 LBS-pre 512 bones UBO (ms)              0.684            0.6840         +0.0000      MATCH       
+E3 LBS-pre 512 bones TBO (ms)              0.080            0.0800         -0.0000      MATCH       
+CPU Palette 60 bones LBS-pre (us)          6.2              6.17           -0.03        MATCH       
+CPU Palette 60 bones DQS-pre (us)          8.4              8.35           -0.05        MATCH       
+
+Summary: 0 values had differences exceeding the comparison tolerance:
+  None. All cited values match CSV measurements within tolerance.
+================================================================================
