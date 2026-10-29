@@ -1,5 +1,6 @@
 # Visual Studio build artifacts
 x64/
+Experiments/x64/
 Debug/
 Release/
 *.obj
@@ -13,12 +14,18 @@ Release/
 *.lastbuildstate
 *.exp
 *.lib
-Sample.exe
 .vs/
 *.opensdf
 *.sdf
 
-# External cloned upstream repository and scratch
-GameAnimationProgramming/
-scratch/
+# Executable in root and Experiments (preserve portable_bench/Sample.exe)
+Sample.exe
+Experiments/Sample.exe
+!portable_bench/Sample.exe
 
+# Verification, fix scratch directories, and external clone
+GameAnimationProgramming/
+Verification/
+Results_fixed/
+Experiments/Results_fixed/
+scratch/
