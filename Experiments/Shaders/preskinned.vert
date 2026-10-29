@@ -32,9 +32,10 @@ void main() {
     skin += animated[joints.w] * weights.w;
 #endif
 
-    gl_Position = projection * view * model * skin * vec4(position, 1.0);
+    vec4 skinnedPos = skin * vec4(position, 1.0);
+    gl_Position = projection * view * model * skinnedPos;
 
-    fragPos = vec3(skin * vec4(normal, 0));
-    norm = vec3(model * skin * vec4(normal, 0));
+    fragPos = vec3(model * skinnedPos);
+    norm = vec3(model * skin * vec4(normal, 0.0));
     uv = texCoord;
 }

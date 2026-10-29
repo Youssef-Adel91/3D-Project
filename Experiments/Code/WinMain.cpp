@@ -199,195 +199,121 @@ static bool SaveBMP(const std::string& path, int width, int height) {
 }
 
 static void CaptureScreenshots(HDC hdc, int width, int height) {
-    CreateDirectoryA("Screenshots", NULL);
-    std::cout << "\n=== Capturing Screenshots ===\n";
+    CreateDirectoryA("Screenshots_v2", NULL);
+    CreateDirectoryA("Screenshots_v2/frames", NULL);
+    std::cout << "\n=== Capturing Presentable Screenshots (Screenshots_v2) ===\n";
 
-    // 1. dq.gltf
-    cgltf_data* gltf = LoadGLTFFile("Assets/dq.gltf");
-    if (!gltf) {
-        std::cerr << "Cannot load Assets/dq.gltf for screenshots\n";
-        return;
-    }
-    std::vector<Mesh> meshes = LoadMeshes(gltf);
-    Skeleton skeleton = LoadSkeleton(gltf);
-    FreeGLTFFile(gltf);
+    Sample sample;
+    sample.Initialize();
 
-    Texture* tex = new Texture("Assets/dq.png");
-    Shader* lbsShader = new Shader("Shaders/skinned.vert", "Shaders/lit.frag");
-    Shader* dqsShader = new Shader("Shaders/dualquaternion.vert", "Shaders/lit.frag");
+    // Warm-up frame
+    sample.RenderSplit(width, height);
+    SwapBuffers(hdc);
 
-    float aspect = (float)width / (float)height;
-    mat4 projection = perspective(60.0f, aspect, 0.01f, 1000.0f);
-    mat4 view = lookAt(vec3(0, 3, 14), vec3(0, 0, 0), vec3(0, 1, 0));
-    Transform model(vec3(0, 0, 0), quat(), vec3(1, 1, 1));
+    struct ShotDef {
+        const char* name;
+        int model;   // 0=Bar, 1=Woman
+        int motion;  // 0=Twist, 1=Bend
+        float param; // angle or time
+    };
 
-    float angles[] = { 0.0f, 90.0f, 180.0f };
-    for (float deg : angles) {
-        // Twist pose: rotate second bone (Bone 0) around bar axis (local Y)
-        Pose pose = skeleton.GetRestPose();
-        float rad = (float)(deg * 3.14159265358979323846 / 180.0);
-        Transform local = pose.GetLocalTransform(0);
-        local.rotation = local.rotation * angleAxis(-rad, vec3(0, 1, 0));
-        pose.SetLocalTransform(0, local);
+    ShotDef shots[] = {
+        { "bar_twist_0",   0, 0, 0.0f },
+        { "bar_twist_90",  0, 0, 90.0f },
+        { "bar_twist_180", 0, 0, 180.0f },
+        { "bar_bend_0",    0, 1, 0.0f },
+        { "bar_bend_60",   0, 1, 60.0f },
+        { "bar_bend_120",  0, 1, 120.0f },
+        { "woman_walk",    1, 0, 0.5f }
+    };
 
-        // Render LBS
-        glViewport(0, 0, width, height);
-        glClearColor(0.15f, 0.18f, 0.22f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        std::vector<mat4> pp;
-        pose.GetMatrixPalette(pp);
-        std::vector<mat4> ib = skeleton.GetInvBindPose();
-
-        lbsShader->Bind();
-        Uniform<mat4>::Set(lbsShader->GetUniform("model"), transformToMat4(model));
-        Uniform<mat4>::Set(lbsShader->GetUniform("view"), view);
-        Uniform<mat4>::Set(lbsShader->GetUniform("projection"), projection);
-        Uniform<vec3>::Set(lbsShader->GetUniform("light"), vec3(1, 1, 1));
-        Uniform<mat4>::Set(lbsShader->GetUniform("pose"), pp);
-        Uniform<mat4>::Set(lbsShader->GetUniform("invBindPose"), ib);
-        tex->Set(lbsShader->GetUniform("tex0"), 0);
-
-        for (auto& m : meshes) {
-            m.Bind(lbsShader->GetAttribute("position"), lbsShader->GetAttribute("normal"),
-                   lbsShader->GetAttribute("texCoord"), lbsShader->GetAttribute("weights"),
-                   lbsShader->GetAttribute("joints"));
-            m.Draw();
-            m.UnBind(lbsShader->GetAttribute("position"), lbsShader->GetAttribute("normal"),
-                     lbsShader->GetAttribute("texCoord"), lbsShader->GetAttribute("weights"),
-                     lbsShader->GetAttribute("joints"));
+    for (const auto& s : shots) {
+        if (s.model == 0) {
+            if (s.motion == 0) sample.SetBarTwist(s.param);
+            else sample.SetBarBend(s.param);
+        } else {
+            sample.SetWomanTime(s.param);
         }
-        tex->UnSet(0);
-        lbsShader->UnBind();
+
+        sample.RenderSplit(width, height);
+        glReadBuffer(GL_BACK);
+        glFinish();
+
+        char rawPath[256];
+        sprintf(rawPath, "Screenshots_v2/raw_%s.bmp", s.name);
+        SaveBMP(rawPath, width, height);
 
         SwapBuffers(hdc);
-        char fname[128];
-        sprintf(fname, "Screenshots/dq_twist_%d_lbs.bmp", (int)deg);
-        SaveBMP(fname, width, height);
-
-        // Render DQS
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        std::vector<DualQuaternion> ppDQ, ibDQ;
-        pose.GetDualQuaternionPalette(ppDQ);
-        skeleton.GetInvBindPose(ibDQ);
-
-        dqsShader->Bind();
-        Uniform<mat4>::Set(dqsShader->GetUniform("model"), transformToMat4(model));
-        Uniform<mat4>::Set(dqsShader->GetUniform("view"), view);
-        Uniform<mat4>::Set(dqsShader->GetUniform("projection"), projection);
-        Uniform<vec3>::Set(dqsShader->GetUniform("light"), vec3(1, 1, 1));
-        Uniform<DualQuaternion>::Set(dqsShader->GetUniform("pose"), ppDQ);
-        Uniform<DualQuaternion>::Set(dqsShader->GetUniform("invBindPose"), ibDQ);
-        tex->Set(dqsShader->GetUniform("tex0"), 0);
-
-        for (auto& m : meshes) {
-            m.Bind(dqsShader->GetAttribute("position"), dqsShader->GetAttribute("normal"),
-                   dqsShader->GetAttribute("texCoord"), dqsShader->GetAttribute("weights"),
-                   dqsShader->GetAttribute("joints"));
-            m.Draw();
-            m.UnBind(dqsShader->GetAttribute("position"), dqsShader->GetAttribute("normal"),
-                     dqsShader->GetAttribute("texCoord"), dqsShader->GetAttribute("weights"),
-                     dqsShader->GetAttribute("joints"));
-        }
-        tex->UnSet(0);
-        dqsShader->UnBind();
-
-        SwapBuffers(hdc);
-        sprintf(fname, "Screenshots/dq_twist_%d_dqs.bmp", (int)deg);
-        SaveBMP(fname, width, height);
     }
 
-    delete tex;
-    delete lbsShader;
-    delete dqsShader;
-    meshes.clear();
+    sample.Shutdown();
+    std::cout << "[Screenshots] Raw split views saved to Screenshots_v2/\n";
 
-    // 2. Woman.gltf
-    cgltf_data* womanGltf = LoadGLTFFile("Assets/Woman.gltf");
-    if (womanGltf) {
-        std::vector<Mesh> womanMeshes = LoadMeshes(womanGltf);
-        Skeleton womanSkeleton = LoadSkeleton(womanGltf);
-        std::vector<Clip> clips = LoadAnimationClips(womanGltf);
-        FreeGLTFFile(womanGltf);
+    // Run python post-processor to annotate badges and output PNGs
+    int ret = system("\"\"C:\\Users\\DELL\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" postprocess_visuals.py --annotate\"");
+    if (ret != 0) {
+        system("python postprocess_visuals.py --annotate");
+    }
+}
 
-        Texture* womanTex = new Texture("Assets/Woman.png");
-        Shader* wLBS = new Shader("Shaders/skinned.vert", "Shaders/lit.frag");
-        Shader* wDQS = new Shader("Shaders/dualquaternion.vert", "Shaders/lit.frag");
+static void RecordVideos(HDC hdc, int width, int height, const std::string& recordOut) {
+    CreateDirectoryA("Screenshots_v2", NULL);
+    CreateDirectoryA("Screenshots_v2/frames", NULL);
+    std::cout << "\n=== Recording Split View Video Loops (Screenshots_v2) ===\n";
 
-        Pose wPose = womanSkeleton.GetRestPose();
-        if (!clips.empty()) {
-            clips[0].Sample(wPose, 0.5f);
-        }
+    Sample sample;
+    sample.Initialize();
 
-        mat4 wView = lookAt(vec3(0, 1.2f, 3.2f), vec3(0, 1.0f, 0), vec3(0, 1, 0));
-        Transform wModel(vec3(0, 0, 0), quat(), vec3(1, 1, 1));
+    // Warm-up frame
+    sample.RenderSplit(width, height);
+    SwapBuffers(hdc);
 
-        // Woman LBS
-        glClearColor(0.15f, 0.18f, 0.22f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    const int fps = 30;
+    const int durationSec = 10;
+    const int totalFrames = fps * durationSec; // 300 frames
 
-        std::vector<mat4> wpp; wPose.GetMatrixPalette(wpp);
-        std::vector<mat4> wib = womanSkeleton.GetInvBindPose();
+    // 1. Bar Twist loop: 0 -> 180 -> 0 (10s @ 30fps)
+    std::cout << "[Record] Generating Bar Twist loop (300 frames)...\n";
+    for (int i = 0; i < totalFrames; ++i) {
+        float t = (float)i / (float)totalFrames;
+        float angle = 180.0f * 0.5f * (1.0f - cosf(t * 2.0f * 3.14159265f));
+        sample.SetBarTwist(angle);
+        sample.RenderSplit(width, height);
+        glReadBuffer(GL_BACK);
+        glFinish();
 
-        wLBS->Bind();
-        Uniform<mat4>::Set(wLBS->GetUniform("model"), transformToMat4(wModel));
-        Uniform<mat4>::Set(wLBS->GetUniform("view"), wView);
-        Uniform<mat4>::Set(wLBS->GetUniform("projection"), projection);
-        Uniform<vec3>::Set(wLBS->GetUniform("light"), vec3(1, 1, 1));
-        Uniform<mat4>::Set(wLBS->GetUniform("pose"), wpp);
-        Uniform<mat4>::Set(wLBS->GetUniform("invBindPose"), wib);
-        womanTex->Set(wLBS->GetUniform("tex0"), 0);
-
-        for (auto& m : womanMeshes) {
-            m.Bind(wLBS->GetAttribute("position"), wLBS->GetAttribute("normal"),
-                   wLBS->GetAttribute("texCoord"), wLBS->GetAttribute("weights"),
-                   wLBS->GetAttribute("joints"));
-            m.Draw();
-            m.UnBind(wLBS->GetAttribute("position"), wLBS->GetAttribute("normal"),
-                     wLBS->GetAttribute("texCoord"), wLBS->GetAttribute("weights"),
-                     wLBS->GetAttribute("joints"));
-        }
-        womanTex->UnSet(0);
-        wLBS->UnBind();
+        char fpath[256];
+        sprintf(fpath, "Screenshots_v2/frames/bar_twist_%04d.bmp", i);
+        SaveBMP(fpath, width, height);
 
         SwapBuffers(hdc);
-        SaveBMP("Screenshots/woman_lbs.bmp", width, height);
+    }
 
-        // Woman DQS
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // 2. Woman Walk loop: 10s continuous walking
+    std::cout << "[Record] Generating Woman Walk loop (300 frames)...\n";
+    for (int i = 0; i < totalFrames; ++i) {
+        float timeSec = (float)i / (float)fps;
+        sample.SetWomanTime(timeSec);
+        sample.RenderSplit(width, height);
+        glReadBuffer(GL_BACK);
+        glFinish();
 
-        std::vector<DualQuaternion> wppDQ, wibDQ;
-        wPose.GetDualQuaternionPalette(wppDQ);
-        womanSkeleton.GetInvBindPose(wibDQ);
-
-        wDQS->Bind();
-        Uniform<mat4>::Set(wDQS->GetUniform("model"), transformToMat4(wModel));
-        Uniform<mat4>::Set(wDQS->GetUniform("view"), wView);
-        Uniform<mat4>::Set(wDQS->GetUniform("projection"), projection);
-        Uniform<vec3>::Set(wDQS->GetUniform("light"), vec3(1, 1, 1));
-        Uniform<DualQuaternion>::Set(wDQS->GetUniform("pose"), wppDQ);
-        Uniform<DualQuaternion>::Set(wDQS->GetUniform("invBindPose"), wibDQ);
-        womanTex->Set(wDQS->GetUniform("tex0"), 0);
-
-        for (auto& m : womanMeshes) {
-            m.Bind(wDQS->GetAttribute("position"), wDQS->GetAttribute("normal"),
-                   wDQS->GetAttribute("texCoord"), wDQS->GetAttribute("weights"),
-                   wDQS->GetAttribute("joints"));
-            m.Draw();
-            m.UnBind(wDQS->GetAttribute("position"), wDQS->GetAttribute("normal"),
-                     wDQS->GetAttribute("texCoord"), wDQS->GetAttribute("weights"),
-                     wDQS->GetAttribute("joints"));
-        }
-        womanTex->UnSet(0);
-        wDQS->UnBind();
+        char fpath[256];
+        sprintf(fpath, "Screenshots_v2/frames/woman_walk_%04d.bmp", i);
+        SaveBMP(fpath, width, height);
 
         SwapBuffers(hdc);
-        SaveBMP("Screenshots/woman_dqs.bmp", width, height);
+    }
 
-        delete womanTex;
-        delete wLBS;
-        delete wDQS;
+    sample.Shutdown();
+    std::cout << "[Record] All frames recorded to Screenshots_v2/frames/\n";
+
+    char encodeCmd[512];
+    sprintf(encodeCmd, "\"\"C:\\Users\\DELL\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" postprocess_visuals.py --encode \"%s\"\"", recordOut.c_str());
+    int ret = system(encodeCmd);
+    if (ret != 0) {
+        sprintf(encodeCmd, "python postprocess_visuals.py --encode \"%s\"", recordOut.c_str());
+        system(encodeCmd);
     }
 }
 
@@ -398,7 +324,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     bool runE2 = (cmd.find("--e2") != std::string::npos) || (cmd.find("--all") != std::string::npos);
     bool runE3 = (cmd.find("--e3") != std::string::npos) || (cmd.find("--all") != std::string::npos);
     bool runScreenshots = (cmd.find("--screenshots") != std::string::npos) || (cmd.find("--all") != std::string::npos);
-    bool isInteractive = (!runE1 && !runE1b && !runE2 && !runE3 && !runScreenshots) || (cmd.find("--interactive") != std::string::npos);
+    bool runDeadCode = (cmd.find("--dead-code") != std::string::npos);
+    bool runRecord = (cmd.find("--record") != std::string::npos);
+    bool isInteractive = (!runE1 && !runE1b && !runE2 && !runE3 && !runScreenshots && !runDeadCode && !runRecord) || (cmd.find("--interactive") != std::string::npos);
+
+    std::string recordOut = "Screenshots_v2/out.mp4";
+    size_t recPos = cmd.find("--record");
+    if (recPos != std::string::npos) {
+        std::string sub = cmd.substr(recPos + 8);
+        while (!sub.empty() && sub[0] == ' ') sub.erase(0, 1);
+        size_t endPos = sub.find(' ');
+        std::string token = (endPos != std::string::npos) ? sub.substr(0, endPos) : sub;
+        if (!token.empty() && token[0] != '-') {
+            recordOut = token;
+        }
+    }
 
     WNDCLASSEX wndclass;
     wndclass.cbSize = sizeof(WNDCLASSEX);
@@ -417,15 +357,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    int clientWidth = 800;
-    int clientHeight = 600;
+    int clientWidth = (screenWidth >= 1360) ? 1280 : 1024;
+    int clientHeight = (screenHeight >= 768) ? 720 : 576;
     RECT windowRect;
     SetRect(&windowRect, (screenWidth / 2) - (clientWidth / 2), (screenHeight / 2) - (clientHeight / 2),
             (screenWidth / 2) + (clientWidth / 2), (screenHeight / 2) + (clientHeight / 2));
 
     DWORD style = (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
     AdjustWindowRectEx(&windowRect, style, FALSE, 0);
-    HWND hwnd = CreateWindowEx(0, wndclass.lpszClassName, "GPU Skinning Experiments (LBS vs DQS)",
+    HWND hwnd = CreateWindowEx(0, wndclass.lpszClassName, "GPU Skinning: LBS vs DQS Split View",
                                style, windowRect.left, windowRect.top,
                                windowRect.right - windowRect.left, windowRect.bottom - windowRect.top,
                                NULL, NULL, hInstance, szCmdLine);
@@ -527,12 +467,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
         }
     }
 
+    if (runDeadCode) {
+        Experiment2 e2;
+        if (e2.Initialize()) {
+            e2.RunDeadCodeBenchmark();
+            e2.Shutdown();
+        }
+    }
+
     if (runScreenshots) {
         CaptureScreenshots(hdc, clientWidth, clientHeight);
     }
 
+    if (runRecord) {
+        RecordVideos(hdc, clientWidth, clientHeight, recordOut);
+    }
+
     if (!isInteractive) {
-        std::cout << "\n[Done] All requested benchmark runs complete. Exiting.\n";
+        std::cout << "\n[Done] All requested tasks complete. Exiting.\n";
         glBindVertexArray(0);
         glDeleteVertexArrays(1, &gVertexArrayObject);
         wglMakeCurrent(NULL, NULL);
@@ -543,6 +495,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     }
 
     // Interactive mode
+    std::cout << "\n=======================================================\n";
+    std::cout << "        GPU SKINNING DEMO (LBS vs DQS SPLIT VIEW)       \n";
+    std::cout << "=======================================================\n";
+    std::cout << "Interactive Controls:\n";
+    std::cout << "  [Space]       Pause / Play animation\n";
+    std::cout << "  [Left/Right]  Decrease / Increase twist or bend angle\n";
+    std::cout << "  [B]           Toggle model: Cylinder Bar <-> Woman character\n";
+    std::cout << "  [T]           Toggle motion: Twist <-> Bend (Bar model)\n";
+    std::cout << "  [Esc]         Quit\n";
+    std::cout << "=======================================================\n\n";
+
     gApplication = new Sample();
     gApplication->Initialize();
 
@@ -567,22 +530,38 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
             GetClientRect(hwnd, &clientRect);
             clientWidth = clientRect.right - clientRect.left;
             clientHeight = clientRect.bottom - clientRect.top;
-            glViewport(0, 0, clientWidth, clientHeight);
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_CULL_FACE);
-            glPointSize(5.0f);
             glBindVertexArray(gVertexArrayObject);
 
-            glClearColor(0.5f, 0.6f, 0.7f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-            float aspect = (float)clientWidth / (float)clientHeight;
-            gApplication->Render(aspect);
+            if (Sample* s = dynamic_cast<Sample*>(gApplication)) {
+                s->RenderSplit(clientWidth, clientHeight);
+            } else {
+                glViewport(0, 0, clientWidth, clientHeight);
+                glClearColor(0.5f, 0.6f, 0.7f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+                float aspect = (float)clientWidth / (float)clientHeight;
+                gApplication->Render(aspect);
+            }
         }
         if (gApplication != 0) {
             SwapBuffers(hdc);
             if (vsynch != 0) {
                 glFinish();
+            }
+        }
+
+        static int sFrameCount = 0;
+        static DWORD sFpsLastTick = GetTickCount();
+        static float sCurrentFps = 60.0f;
+        sFrameCount++;
+        if (thisTick - sFpsLastTick >= 250) {
+            sCurrentFps = (float)sFrameCount / ((float)(thisTick - sFpsLastTick) * 0.001f);
+            sFrameCount = 0;
+            sFpsLastTick = thisTick;
+            if (Sample* s = dynamic_cast<Sample*>(gApplication)) {
+                std::string title = s->GetWindowTitle(sCurrentFps);
+                SetWindowTextA(hwnd, title.c_str());
             }
         }
     }
@@ -598,6 +577,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam) {
     switch (iMsg) {
+    case WM_KEYDOWN:
+        if (wParam == VK_ESCAPE) {
+            PostQuitMessage(0);
+            return 0;
+        }
+        if (gApplication != 0) {
+            gApplication->OnKeyDown((int)wParam);
+        }
+        return 0;
     case WM_CLOSE:
         if (gApplication != 0) {
             gApplication->Shutdown();

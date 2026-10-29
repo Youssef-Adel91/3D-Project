@@ -28,7 +28,11 @@
 
 Experiment1::Experiment1()
     : mTexture(nullptr), mLBSShader(nullptr), mDQSShader(nullptr),
-      mLBSTFShader(nullptr), mDQSTFShader(nullptr), mRestVolume(0.0) {}
+      mLBSTFShader(nullptr), mDQSTFShader(nullptr),
+      mLBSPreTFShader(nullptr), mDQSPreTFShader(nullptr),
+      mLBSPreUBOTFShader(nullptr), mDQSPreUBOTFShader(nullptr),
+      mLBSPreTBOTFShader(nullptr), mDQSPreTBOTFShader(nullptr),
+      mRestVolume(0.0) {}
 
 Experiment1::~Experiment1() {}
 
@@ -58,6 +62,18 @@ bool Experiment1::Initialize() {
     mLBSTFShader->LoadWithTF("Shaders/skinned_tf.vert", "Shaders/lit.frag", tfVaryings, 1);
     mDQSTFShader = new Shader();
     mDQSTFShader->LoadWithTF("Shaders/dualquaternion_tf.vert", "Shaders/lit.frag", tfVaryings, 1);
+    mLBSPreTFShader = new Shader();
+    mLBSPreTFShader->LoadWithTF("Shaders/preskinned_tf.vert", "Shaders/lit.frag", tfVaryings, 1);
+    mDQSPreTFShader = new Shader();
+    mDQSPreTFShader->LoadWithTF("Shaders/dqs_pre_tf.vert", "Shaders/lit.frag", tfVaryings, 1);
+    mLBSPreUBOTFShader = new Shader();
+    mLBSPreUBOTFShader->LoadWithTF("Shaders/preskinned_ubo_tf.vert", "Shaders/lit.frag", tfVaryings, 1);
+    mDQSPreUBOTFShader = new Shader();
+    mDQSPreUBOTFShader->LoadWithTF("Shaders/dqs_pre_ubo_tf.vert", "Shaders/lit.frag", tfVaryings, 1);
+    mLBSPreTBOTFShader = new Shader();
+    mLBSPreTBOTFShader->LoadWithTF("Shaders/preskinned_tbo_tf.vert", "Shaders/lit.frag", tfVaryings, 1);
+    mDQSPreTBOTFShader = new Shader();
+    mDQSPreTBOTFShader->LoadWithTF("Shaders/dqs_pre_tbo_tf.vert", "Shaders/lit.frag", tfVaryings, 1);
 
     // Compute rest volume
     const Mesh& mesh = mMeshes[0];
@@ -75,11 +91,23 @@ void Experiment1::Shutdown() {
     delete mDQSShader;
     delete mLBSTFShader;
     delete mDQSTFShader;
-    mTexture     = nullptr;
-    mLBSShader   = nullptr;
-    mDQSShader   = nullptr;
-    mLBSTFShader = nullptr;
-    mDQSTFShader = nullptr;
+    delete mLBSPreTFShader;
+    delete mDQSPreTFShader;
+    delete mLBSPreUBOTFShader;
+    delete mDQSPreUBOTFShader;
+    delete mLBSPreTBOTFShader;
+    delete mDQSPreTBOTFShader;
+    mTexture           = nullptr;
+    mLBSShader         = nullptr;
+    mDQSShader         = nullptr;
+    mLBSTFShader       = nullptr;
+    mDQSTFShader       = nullptr;
+    mLBSPreTFShader    = nullptr;
+    mDQSPreTFShader    = nullptr;
+    mLBSPreUBOTFShader = nullptr;
+    mDQSPreUBOTFShader = nullptr;
+    mLBSPreTBOTFShader = nullptr;
+    mDQSPreTBOTFShader = nullptr;
     mMeshes.clear();
 }
 
@@ -143,6 +171,49 @@ std::vector<vec3> Experiment1::SkinDQS(
 
         // Blend
         DualQuaternion skinDQ = dq0 * w.x + dq1 * w.y + dq2 * w.z + dq3 * w.w;
+        normalize(skinDQ);
+        out[i] = transformPoint(skinDQ, restPos[i]);
+    }
+    return out;
+}
+
+std::vector<vec3> Experiment1::SkinLBSPre(
+    const std::vector<vec3>& restPos,
+    const std::vector<ivec4>& joints,
+    const std::vector<vec4>& weights,
+    const std::vector<mat4>& animated) const
+{
+    size_t N = restPos.size();
+    std::vector<vec3> out(N);
+    for (size_t i = 0; i < N; ++i) {
+        const ivec4& j = joints[i];
+        const vec4&  w = weights[i];
+        mat4 skin = animated[j.x] * w.x +
+                    animated[j.y] * w.y +
+                    animated[j.z] * w.z +
+                    animated[j.w] * w.w;
+        out[i] = transformPoint(skin, restPos[i]);
+    }
+    return out;
+}
+
+std::vector<vec3> Experiment1::SkinDQSPre(
+    const std::vector<vec3>& restPos,
+    const std::vector<ivec4>& joints,
+    const std::vector<vec4>& weights,
+    const std::vector<DualQuaternion>& animated) const
+{
+    size_t N = restPos.size();
+    std::vector<vec3> out(N);
+    for (size_t i = 0; i < N; ++i) {
+        const ivec4& j = joints[i];
+        vec4 w = weights[i];
+
+        if (dot(animated[j.x].real, animated[j.y].real) < 0.0f) w.y *= -1.0f;
+        if (dot(animated[j.x].real, animated[j.z].real) < 0.0f) w.z *= -1.0f;
+        if (dot(animated[j.x].real, animated[j.w].real) < 0.0f) w.w *= -1.0f;
+
+        DualQuaternion skinDQ = animated[j.x]*w.x + animated[j.y]*w.y + animated[j.z]*w.z + animated[j.w]*w.w;
         normalize(skinDQ);
         out[i] = transformPoint(skinDQ, restPos[i]);
     }
@@ -457,6 +528,550 @@ Experiment1::TFResult Experiment1::ValidateDQSWithTF(Pose pose, float angleDeg) 
     return { passed, maxDiff, (int)cpuOut.size() };
 }
 
+std::vector<vec3> Experiment1::CaptureGPU_LBS_Pre(
+    const std::vector<mat4>& animated,
+    const Mesh& mesh)
+{
+    int N = (int)mesh.GetPosition().size();
+    if (N == 0) return {};
+
+    GLuint tfBuf = 0;
+    glGenBuffers(1, &tfBuf);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glBufferData(GL_TRANSFORM_FEEDBACK_BUFFER, N * sizeof(vec3), nullptr, GL_STREAM_READ);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, tfBuf);
+
+    mLBSPreTFShader->Bind();
+
+    mat4 identity;
+    mat4 view = lookAt(vec3(0,3,14), vec3(0,0,0), vec3(0,1,0));
+    mat4 proj = perspective(60.0f, 1.0f, 0.01f, 1000.0f);
+    Uniform<mat4>::Set(mLBSPreTFShader->GetUniform("model"),      identity);
+    Uniform<mat4>::Set(mLBSPreTFShader->GetUniform("view"),       view);
+    Uniform<mat4>::Set(mLBSPreTFShader->GetUniform("projection"), proj);
+    Uniform<mat4>::Set(mLBSPreTFShader->GetUniform("animated"), (std::vector<mat4>&)const_cast<std::vector<mat4>&>(animated));
+
+    const_cast<Mesh&>(mesh).Bind(
+        mLBSPreTFShader->GetAttribute("position"),
+        mLBSPreTFShader->GetAttribute("normal"),
+        mLBSPreTFShader->GetAttribute("texCoord"),
+        mLBSPreTFShader->GetAttribute("weights"),
+        mLBSPreTFShader->GetAttribute("joints"));
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    glBeginTransformFeedback(GL_POINTS);
+    glDrawArrays(GL_POINTS, 0, N);
+    glEndTransformFeedback();
+    glDisable(GL_RASTERIZER_DISCARD);
+    glFlush();
+
+    const_cast<Mesh&>(mesh).UnBind(
+        mLBSPreTFShader->GetAttribute("position"),
+        mLBSPreTFShader->GetAttribute("normal"),
+        mLBSPreTFShader->GetAttribute("texCoord"),
+        mLBSPreTFShader->GetAttribute("weights"),
+        mLBSPreTFShader->GetAttribute("joints"));
+
+    mLBSPreTFShader->UnBind();
+
+    std::vector<vec3> gpuOut(N);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, N * sizeof(vec3), gpuOut.data());
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, 0);
+    glDeleteBuffers(1, &tfBuf);
+
+    return gpuOut;
+}
+
+std::vector<vec3> Experiment1::CaptureGPU_DQS_Pre(
+    const std::vector<DualQuaternion>& animated,
+    const Mesh& mesh)
+{
+    int N = (int)mesh.GetPosition().size();
+    if (N == 0) return {};
+
+    GLuint tfBuf = 0;
+    glGenBuffers(1, &tfBuf);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glBufferData(GL_TRANSFORM_FEEDBACK_BUFFER, N * sizeof(vec3), nullptr, GL_STREAM_READ);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, tfBuf);
+
+    mDQSPreTFShader->Bind();
+
+    mat4 identity;
+    mat4 view = lookAt(vec3(0,3,14), vec3(0,0,0), vec3(0,1,0));
+    mat4 proj = perspective(60.0f, 1.0f, 0.01f, 1000.0f);
+    Uniform<mat4>::Set(mDQSPreTFShader->GetUniform("model"),      identity);
+    Uniform<mat4>::Set(mDQSPreTFShader->GetUniform("view"),       view);
+    Uniform<mat4>::Set(mDQSPreTFShader->GetUniform("projection"), proj);
+    Uniform<DualQuaternion>::Set(mDQSPreTFShader->GetUniform("animated"), (std::vector<DualQuaternion>&)const_cast<std::vector<DualQuaternion>&>(animated));
+
+    const_cast<Mesh&>(mesh).Bind(
+        mDQSPreTFShader->GetAttribute("position"),
+        mDQSPreTFShader->GetAttribute("normal"),
+        mDQSPreTFShader->GetAttribute("texCoord"),
+        mDQSPreTFShader->GetAttribute("weights"),
+        mDQSPreTFShader->GetAttribute("joints"));
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    glBeginTransformFeedback(GL_POINTS);
+    glDrawArrays(GL_POINTS, 0, N);
+    glEndTransformFeedback();
+    glDisable(GL_RASTERIZER_DISCARD);
+    glFlush();
+
+    const_cast<Mesh&>(mesh).UnBind(
+        mDQSPreTFShader->GetAttribute("position"),
+        mDQSPreTFShader->GetAttribute("normal"),
+        mDQSPreTFShader->GetAttribute("texCoord"),
+        mDQSPreTFShader->GetAttribute("weights"),
+        mDQSPreTFShader->GetAttribute("joints"));
+
+    mDQSPreTFShader->UnBind();
+
+    std::vector<vec3> gpuOut(N);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, N * sizeof(vec3), gpuOut.data());
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, 0);
+    glDeleteBuffers(1, &tfBuf);
+
+    return gpuOut;
+}
+
+std::vector<vec3> Experiment1::CaptureGPU_LBS_UBO(
+    const std::vector<mat4>& animated,
+    const Mesh& mesh)
+{
+    int N = (int)mesh.GetPosition().size();
+    if (N == 0) return {};
+
+    GLuint tfBuf = 0;
+    glGenBuffers(1, &tfBuf);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glBufferData(GL_TRANSFORM_FEEDBACK_BUFFER, N * sizeof(vec3), nullptr, GL_STREAM_READ);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, tfBuf);
+
+    GLuint ubo = 0;
+    glGenBuffers(1, &ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    glBufferData(GL_UNIFORM_BUFFER, animated.size() * sizeof(mat4), animated.data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo);
+
+    mLBSPreUBOTFShader->Bind();
+    GLuint blockIdx = glGetUniformBlockIndex(mLBSPreUBOTFShader->GetHandle(), "SkinningData");
+    if (blockIdx != GL_INVALID_INDEX) {
+        glUniformBlockBinding(mLBSPreUBOTFShader->GetHandle(), blockIdx, 0);
+    }
+
+    mat4 identity;
+    mat4 view = lookAt(vec3(0,3,14), vec3(0,0,0), vec3(0,1,0));
+    mat4 proj = perspective(60.0f, 1.0f, 0.01f, 1000.0f);
+    Uniform<mat4>::Set(mLBSPreUBOTFShader->GetUniform("model"),      identity);
+    Uniform<mat4>::Set(mLBSPreUBOTFShader->GetUniform("view"),       view);
+    Uniform<mat4>::Set(mLBSPreUBOTFShader->GetUniform("projection"), proj);
+
+    const_cast<Mesh&>(mesh).Bind(
+        mLBSPreUBOTFShader->GetAttribute("position"),
+        mLBSPreUBOTFShader->GetAttribute("normal"),
+        mLBSPreUBOTFShader->GetAttribute("texCoord"),
+        mLBSPreUBOTFShader->GetAttribute("weights"),
+        mLBSPreUBOTFShader->GetAttribute("joints"));
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    glBeginTransformFeedback(GL_POINTS);
+    glDrawArrays(GL_POINTS, 0, N);
+    glEndTransformFeedback();
+    glDisable(GL_RASTERIZER_DISCARD);
+    glFlush();
+
+    const_cast<Mesh&>(mesh).UnBind(
+        mLBSPreUBOTFShader->GetAttribute("position"),
+        mLBSPreUBOTFShader->GetAttribute("normal"),
+        mLBSPreUBOTFShader->GetAttribute("texCoord"),
+        mLBSPreUBOTFShader->GetAttribute("weights"),
+        mLBSPreUBOTFShader->GetAttribute("joints"));
+
+    mLBSPreUBOTFShader->UnBind();
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    glDeleteBuffers(1, &ubo);
+
+    std::vector<vec3> gpuOut(N);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, N * sizeof(vec3), gpuOut.data());
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, 0);
+    glDeleteBuffers(1, &tfBuf);
+
+    return gpuOut;
+}
+
+std::vector<vec3> Experiment1::CaptureGPU_DQS_UBO(
+    const std::vector<DualQuaternion>& animated,
+    const Mesh& mesh)
+{
+    int N = (int)mesh.GetPosition().size();
+    if (N == 0) return {};
+
+    GLuint tfBuf = 0;
+    glGenBuffers(1, &tfBuf);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glBufferData(GL_TRANSFORM_FEEDBACK_BUFFER, N * sizeof(vec3), nullptr, GL_STREAM_READ);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, tfBuf);
+
+    GLuint ubo = 0;
+    glGenBuffers(1, &ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    glBufferData(GL_UNIFORM_BUFFER, animated.size() * sizeof(DualQuaternion), animated.data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo);
+
+    mDQSPreUBOTFShader->Bind();
+    GLuint blockIdx = glGetUniformBlockIndex(mDQSPreUBOTFShader->GetHandle(), "SkinningData");
+    if (blockIdx != GL_INVALID_INDEX) {
+        glUniformBlockBinding(mDQSPreUBOTFShader->GetHandle(), blockIdx, 0);
+    }
+
+    mat4 identity;
+    mat4 view = lookAt(vec3(0,3,14), vec3(0,0,0), vec3(0,1,0));
+    mat4 proj = perspective(60.0f, 1.0f, 0.01f, 1000.0f);
+    Uniform<mat4>::Set(mDQSPreUBOTFShader->GetUniform("model"),      identity);
+    Uniform<mat4>::Set(mDQSPreUBOTFShader->GetUniform("view"),       view);
+    Uniform<mat4>::Set(mDQSPreUBOTFShader->GetUniform("projection"), proj);
+
+    const_cast<Mesh&>(mesh).Bind(
+        mDQSPreUBOTFShader->GetAttribute("position"),
+        mDQSPreUBOTFShader->GetAttribute("normal"),
+        mDQSPreUBOTFShader->GetAttribute("texCoord"),
+        mDQSPreUBOTFShader->GetAttribute("weights"),
+        mDQSPreUBOTFShader->GetAttribute("joints"));
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    glBeginTransformFeedback(GL_POINTS);
+    glDrawArrays(GL_POINTS, 0, N);
+    glEndTransformFeedback();
+    glDisable(GL_RASTERIZER_DISCARD);
+    glFlush();
+
+    const_cast<Mesh&>(mesh).UnBind(
+        mDQSPreUBOTFShader->GetAttribute("position"),
+        mDQSPreUBOTFShader->GetAttribute("normal"),
+        mDQSPreUBOTFShader->GetAttribute("texCoord"),
+        mDQSPreUBOTFShader->GetAttribute("weights"),
+        mDQSPreUBOTFShader->GetAttribute("joints"));
+
+    mDQSPreUBOTFShader->UnBind();
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    glDeleteBuffers(1, &ubo);
+
+    std::vector<vec3> gpuOut(N);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, N * sizeof(vec3), gpuOut.data());
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, 0);
+    glDeleteBuffers(1, &tfBuf);
+
+    return gpuOut;
+}
+
+std::vector<vec3> Experiment1::CaptureGPU_LBS_TBO(
+    const std::vector<mat4>& animated,
+    const Mesh& mesh)
+{
+    int N = (int)mesh.GetPosition().size();
+    if (N == 0) return {};
+
+    GLuint tfBuf = 0;
+    glGenBuffers(1, &tfBuf);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glBufferData(GL_TRANSFORM_FEEDBACK_BUFFER, N * sizeof(vec3), nullptr, GL_STREAM_READ);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, tfBuf);
+
+    GLuint tboBuf = 0, tboTex = 0;
+    glGenBuffers(1, &tboBuf);
+    glGenTextures(1, &tboTex);
+    glBindBuffer(GL_TEXTURE_BUFFER, tboBuf);
+    glBufferData(GL_TEXTURE_BUFFER, animated.size() * sizeof(mat4), animated.data(), GL_DYNAMIC_DRAW);
+    glBindTexture(GL_TEXTURE_BUFFER, tboTex);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBuf);
+
+    mLBSPreTBOTFShader->Bind();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_BUFFER, tboTex);
+    Uniform<int>::Set(mLBSPreTBOTFShader->GetUniform("skinMatrices"), 0);
+    int bcLoc = mLBSPreTBOTFShader->GetUniform("boneCount");
+    if (bcLoc >= 0) Uniform<int>::Set(bcLoc, (int)animated.size());
+
+    mat4 identity;
+    mat4 view = lookAt(vec3(0,3,14), vec3(0,0,0), vec3(0,1,0));
+    mat4 proj = perspective(60.0f, 1.0f, 0.01f, 1000.0f);
+    Uniform<mat4>::Set(mLBSPreTBOTFShader->GetUniform("model"),      identity);
+    Uniform<mat4>::Set(mLBSPreTBOTFShader->GetUniform("view"),       view);
+    Uniform<mat4>::Set(mLBSPreTBOTFShader->GetUniform("projection"), proj);
+
+    const_cast<Mesh&>(mesh).Bind(
+        mLBSPreTBOTFShader->GetAttribute("position"),
+        mLBSPreTBOTFShader->GetAttribute("normal"),
+        mLBSPreTBOTFShader->GetAttribute("texCoord"),
+        mLBSPreTBOTFShader->GetAttribute("weights"),
+        mLBSPreTBOTFShader->GetAttribute("joints"));
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    glBeginTransformFeedback(GL_POINTS);
+    glDrawArrays(GL_POINTS, 0, N);
+    glEndTransformFeedback();
+    glDisable(GL_RASTERIZER_DISCARD);
+    glFlush();
+
+    const_cast<Mesh&>(mesh).UnBind(
+        mLBSPreTBOTFShader->GetAttribute("position"),
+        mLBSPreTBOTFShader->GetAttribute("normal"),
+        mLBSPreTBOTFShader->GetAttribute("texCoord"),
+        mLBSPreTBOTFShader->GetAttribute("weights"),
+        mLBSPreTBOTFShader->GetAttribute("joints"));
+
+    mLBSPreTBOTFShader->UnBind();
+    glBindTexture(GL_TEXTURE_BUFFER, 0);
+    glDeleteTextures(1, &tboTex);
+    glBindBuffer(GL_TEXTURE_BUFFER, 0);
+    glDeleteBuffers(1, &tboBuf);
+
+    std::vector<vec3> gpuOut(N);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, N * sizeof(vec3), gpuOut.data());
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, 0);
+    glDeleteBuffers(1, &tfBuf);
+
+    return gpuOut;
+}
+
+std::vector<vec3> Experiment1::CaptureGPU_DQS_TBO(
+    const std::vector<DualQuaternion>& animated,
+    const Mesh& mesh)
+{
+    int N = (int)mesh.GetPosition().size();
+    if (N == 0) return {};
+
+    GLuint tfBuf = 0;
+    glGenBuffers(1, &tfBuf);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glBufferData(GL_TRANSFORM_FEEDBACK_BUFFER, N * sizeof(vec3), nullptr, GL_STREAM_READ);
+    glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, tfBuf);
+
+    GLuint tboBuf = 0, tboTex = 0;
+    glGenBuffers(1, &tboBuf);
+    glGenTextures(1, &tboTex);
+    glBindBuffer(GL_TEXTURE_BUFFER, tboBuf);
+    glBufferData(GL_TEXTURE_BUFFER, animated.size() * sizeof(DualQuaternion), animated.data(), GL_DYNAMIC_DRAW);
+    glBindTexture(GL_TEXTURE_BUFFER, tboTex);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, tboBuf);
+
+    mDQSPreTBOTFShader->Bind();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_BUFFER, tboTex);
+    Uniform<int>::Set(mDQSPreTBOTFShader->GetUniform("skinDQs"), 0);
+
+    mat4 identity;
+    mat4 view = lookAt(vec3(0,3,14), vec3(0,0,0), vec3(0,1,0));
+    mat4 proj = perspective(60.0f, 1.0f, 0.01f, 1000.0f);
+    Uniform<mat4>::Set(mDQSPreTBOTFShader->GetUniform("model"),      identity);
+    Uniform<mat4>::Set(mDQSPreTBOTFShader->GetUniform("view"),       view);
+    Uniform<mat4>::Set(mDQSPreTBOTFShader->GetUniform("projection"), proj);
+
+    const_cast<Mesh&>(mesh).Bind(
+        mDQSPreTBOTFShader->GetAttribute("position"),
+        mDQSPreTBOTFShader->GetAttribute("normal"),
+        mDQSPreTBOTFShader->GetAttribute("texCoord"),
+        mDQSPreTBOTFShader->GetAttribute("weights"),
+        mDQSPreTBOTFShader->GetAttribute("joints"));
+
+    glEnable(GL_RASTERIZER_DISCARD);
+    glBeginTransformFeedback(GL_POINTS);
+    glDrawArrays(GL_POINTS, 0, N);
+    glEndTransformFeedback();
+    glDisable(GL_RASTERIZER_DISCARD);
+    glFlush();
+
+    const_cast<Mesh&>(mesh).UnBind(
+        mDQSPreTBOTFShader->GetAttribute("position"),
+        mDQSPreTBOTFShader->GetAttribute("normal"),
+        mDQSPreTBOTFShader->GetAttribute("texCoord"),
+        mDQSPreTBOTFShader->GetAttribute("weights"),
+        mDQSPreTBOTFShader->GetAttribute("joints"));
+
+    mDQSPreTBOTFShader->UnBind();
+    glBindTexture(GL_TEXTURE_BUFFER, 0);
+    glDeleteTextures(1, &tboTex);
+    glBindBuffer(GL_TEXTURE_BUFFER, 0);
+    glDeleteBuffers(1, &tboBuf);
+
+    std::vector<vec3> gpuOut(N);
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, tfBuf);
+    glGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, N * sizeof(vec3), gpuOut.data());
+    glBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, 0);
+    glDeleteBuffers(1, &tfBuf);
+
+    return gpuOut;
+}
+
+Experiment1::TFResult Experiment1::ValidateLBSPreWithTF(Pose pose, float angleDeg) {
+    std::vector<mat4> posePalette;
+    pose.GetMatrixPalette(posePalette);
+    std::vector<mat4> invBind = mSkeleton.GetInvBindPose();
+    std::vector<mat4> animated(posePalette.size());
+    for (size_t i = 0; i < posePalette.size(); ++i) {
+        animated[i] = posePalette[i] * invBind[i];
+    }
+
+    const Mesh& mesh = mMeshes[0];
+    std::vector<vec3> cpuOut = SkinLBSPre(mesh.GetPosition(), mesh.GetInfluences(),
+                                           mesh.GetWeights(), animated);
+    std::vector<vec3> gpuOut = CaptureGPU_LBS_Pre(animated, mesh);
+
+    double maxDiff = 0.0;
+    for (size_t i = 0; i < cpuOut.size() && i < gpuOut.size(); ++i) {
+        vec3 d = {cpuOut[i].x - gpuOut[i].x, cpuOut[i].y - gpuOut[i].y, cpuOut[i].z - gpuOut[i].z};
+        double dist = sqrt((double)(d.x*d.x + d.y*d.y + d.z*d.z));
+        if (dist > maxDiff) maxDiff = dist;
+    }
+
+    bool passed = (maxDiff < 1e-4);
+    std::cout << "[E1] LBS-pre (uniform) TF validation at " << angleDeg << " deg: "
+              << (passed ? "PASS" : "FAIL") << " maxDiff=" << maxDiff << "\n";
+    return { passed, maxDiff, (int)cpuOut.size() };
+}
+
+Experiment1::TFResult Experiment1::ValidateDQSPreWithTF(Pose pose, float angleDeg) {
+    std::vector<DualQuaternion> poseDQ, invBindDQ;
+    pose.GetDualQuaternionPalette(poseDQ);
+    mSkeleton.GetInvBindPose(invBindDQ);
+    std::vector<DualQuaternion> animated(poseDQ.size());
+    for (size_t i = 0; i < poseDQ.size(); ++i) {
+        animated[i] = CombineDQ(invBindDQ[i], poseDQ[i]);
+    }
+
+    const Mesh& mesh = mMeshes[0];
+    std::vector<vec3> cpuOut = SkinDQSPre(mesh.GetPosition(), mesh.GetInfluences(),
+                                           mesh.GetWeights(), animated);
+    std::vector<vec3> gpuOut = CaptureGPU_DQS_Pre(animated, mesh);
+
+    double maxDiff = 0.0;
+    for (size_t i = 0; i < cpuOut.size() && i < gpuOut.size(); ++i) {
+        vec3 d = {cpuOut[i].x - gpuOut[i].x, cpuOut[i].y - gpuOut[i].y, cpuOut[i].z - gpuOut[i].z};
+        double dist = sqrt((double)(d.x*d.x + d.y*d.y + d.z*d.z));
+        if (dist > maxDiff) maxDiff = dist;
+    }
+
+    bool passed = (maxDiff < 1e-4);
+    std::cout << "[E1] DQS-pre (uniform) TF validation at " << angleDeg << " deg: "
+              << (passed ? "PASS" : "FAIL") << " maxDiff=" << maxDiff << "\n";
+    return { passed, maxDiff, (int)cpuOut.size() };
+}
+
+Experiment1::TFResult Experiment1::ValidateLBSUBODWithTF(Pose pose, float angleDeg) {
+    std::vector<mat4> posePalette;
+    pose.GetMatrixPalette(posePalette);
+    std::vector<mat4> invBind = mSkeleton.GetInvBindPose();
+    std::vector<mat4> animated(posePalette.size());
+    for (size_t i = 0; i < posePalette.size(); ++i) {
+        animated[i] = posePalette[i] * invBind[i];
+    }
+
+    const Mesh& mesh = mMeshes[0];
+    std::vector<vec3> cpuOut = SkinLBSPre(mesh.GetPosition(), mesh.GetInfluences(),
+                                           mesh.GetWeights(), animated);
+    std::vector<vec3> gpuOut = CaptureGPU_LBS_UBO(animated, mesh);
+
+    double maxDiff = 0.0;
+    for (size_t i = 0; i < cpuOut.size() && i < gpuOut.size(); ++i) {
+        vec3 d = {cpuOut[i].x - gpuOut[i].x, cpuOut[i].y - gpuOut[i].y, cpuOut[i].z - gpuOut[i].z};
+        double dist = sqrt((double)(d.x*d.x + d.y*d.y + d.z*d.z));
+        if (dist > maxDiff) maxDiff = dist;
+    }
+
+    bool passed = (maxDiff < 1e-4);
+    std::cout << "[E1] LBS-pre (UBO) TF validation at " << angleDeg << " deg: "
+              << (passed ? "PASS" : "FAIL") << " maxDiff=" << maxDiff << "\n";
+    return { passed, maxDiff, (int)cpuOut.size() };
+}
+
+Experiment1::TFResult Experiment1::ValidateDQSUBODWithTF(Pose pose, float angleDeg) {
+    std::vector<DualQuaternion> poseDQ, invBindDQ;
+    pose.GetDualQuaternionPalette(poseDQ);
+    mSkeleton.GetInvBindPose(invBindDQ);
+    std::vector<DualQuaternion> animated(poseDQ.size());
+    for (size_t i = 0; i < poseDQ.size(); ++i) {
+        animated[i] = CombineDQ(invBindDQ[i], poseDQ[i]);
+    }
+
+    const Mesh& mesh = mMeshes[0];
+    std::vector<vec3> cpuOut = SkinDQSPre(mesh.GetPosition(), mesh.GetInfluences(),
+                                           mesh.GetWeights(), animated);
+    std::vector<vec3> gpuOut = CaptureGPU_DQS_UBO(animated, mesh);
+
+    double maxDiff = 0.0;
+    for (size_t i = 0; i < cpuOut.size() && i < gpuOut.size(); ++i) {
+        vec3 d = {cpuOut[i].x - gpuOut[i].x, cpuOut[i].y - gpuOut[i].y, cpuOut[i].z - gpuOut[i].z};
+        double dist = sqrt((double)(d.x*d.x + d.y*d.y + d.z*d.z));
+        if (dist > maxDiff) maxDiff = dist;
+    }
+
+    bool passed = (maxDiff < 1e-4);
+    std::cout << "[E1] DQS-pre (UBO) TF validation at " << angleDeg << " deg: "
+              << (passed ? "PASS" : "FAIL") << " maxDiff=" << maxDiff << "\n";
+    return { passed, maxDiff, (int)cpuOut.size() };
+}
+
+Experiment1::TFResult Experiment1::ValidateLBSTBODWithTF(Pose pose, float angleDeg) {
+    std::vector<mat4> posePalette;
+    pose.GetMatrixPalette(posePalette);
+    std::vector<mat4> invBind = mSkeleton.GetInvBindPose();
+    std::vector<mat4> animated(posePalette.size());
+    for (size_t i = 0; i < posePalette.size(); ++i) {
+        animated[i] = posePalette[i] * invBind[i];
+    }
+
+    const Mesh& mesh = mMeshes[0];
+    std::vector<vec3> cpuOut = SkinLBSPre(mesh.GetPosition(), mesh.GetInfluences(),
+                                           mesh.GetWeights(), animated);
+    std::vector<vec3> gpuOut = CaptureGPU_LBS_TBO(animated, mesh);
+
+    double maxDiff = 0.0;
+    for (size_t i = 0; i < cpuOut.size() && i < gpuOut.size(); ++i) {
+        vec3 d = {cpuOut[i].x - gpuOut[i].x, cpuOut[i].y - gpuOut[i].y, cpuOut[i].z - gpuOut[i].z};
+        double dist = sqrt((double)(d.x*d.x + d.y*d.y + d.z*d.z));
+        if (dist > maxDiff) maxDiff = dist;
+    }
+
+    bool passed = (maxDiff < 1e-4);
+    std::cout << "[E1] LBS-pre (TBO) TF validation at " << angleDeg << " deg: "
+              << (passed ? "PASS" : "FAIL") << " maxDiff=" << maxDiff << "\n";
+    return { passed, maxDiff, (int)cpuOut.size() };
+}
+
+Experiment1::TFResult Experiment1::ValidateDQSTBODWithTF(Pose pose, float angleDeg) {
+    std::vector<DualQuaternion> poseDQ, invBindDQ;
+    pose.GetDualQuaternionPalette(poseDQ);
+    mSkeleton.GetInvBindPose(invBindDQ);
+    std::vector<DualQuaternion> animated(poseDQ.size());
+    for (size_t i = 0; i < poseDQ.size(); ++i) {
+        animated[i] = CombineDQ(invBindDQ[i], poseDQ[i]);
+    }
+
+    const Mesh& mesh = mMeshes[0];
+    std::vector<vec3> cpuOut = SkinDQSPre(mesh.GetPosition(), mesh.GetInfluences(),
+                                           mesh.GetWeights(), animated);
+    std::vector<vec3> gpuOut = CaptureGPU_DQS_TBO(animated, mesh);
+
+    double maxDiff = 0.0;
+    for (size_t i = 0; i < cpuOut.size() && i < gpuOut.size(); ++i) {
+        vec3 d = {cpuOut[i].x - gpuOut[i].x, cpuOut[i].y - gpuOut[i].y, cpuOut[i].z - gpuOut[i].z};
+        double dist = sqrt((double)(d.x*d.x + d.y*d.y + d.z*d.z));
+        if (dist > maxDiff) maxDiff = dist;
+    }
+
+    bool passed = (maxDiff < 1e-4);
+    std::cout << "[E1] DQS-pre (TBO) TF validation at " << angleDeg << " deg: "
+              << (passed ? "PASS" : "FAIL") << " maxDiff=" << maxDiff << "\n";
+    return { passed, maxDiff, (int)cpuOut.size() };
+}
+
 void Experiment1::ValidateLBSTwistAnalytical() {
     std::cout << "[E1] Validating LBS twist analytical formula...\n";
 
@@ -630,15 +1245,36 @@ void Experiment1::Run() {
     // GPU/CPU validation at 3 angles (30, 90, 150 deg twist)
     float valAngles[] = {30.0f, 90.0f, 150.0f};
     bool lbsTFAllPassed = true, dqsTFAllPassed = true;
+    bool lbsPreTFAllPassed = true, dqsPreTFAllPassed = true;
+    bool lbsUboTFAllPassed = true, dqsUboTFAllPassed = true;
+    bool lbsTboTFAllPassed = true, dqsTboTFAllPassed = true;
     for (float deg : valAngles) {
         Pose pose = MakeTwistPose(deg);
         auto r1 = ValidateLBSWithTF(pose, deg);
         auto r2 = ValidateDQSWithTF(pose, deg);
+        auto r3 = ValidateLBSPreWithTF(pose, deg);
+        auto r4 = ValidateDQSPreWithTF(pose, deg);
+        auto r5 = ValidateLBSUBODWithTF(pose, deg);
+        auto r6 = ValidateDQSUBODWithTF(pose, deg);
+        auto r7 = ValidateLBSTBODWithTF(pose, deg);
+        auto r8 = ValidateDQSTBODWithTF(pose, deg);
         if (!r1.passed) lbsTFAllPassed = false;
         if (!r2.passed) dqsTFAllPassed = false;
+        if (!r3.passed) lbsPreTFAllPassed = false;
+        if (!r4.passed) dqsPreTFAllPassed = false;
+        if (!r5.passed) lbsUboTFAllPassed = false;
+        if (!r6.passed) dqsUboTFAllPassed = false;
+        if (!r7.passed) lbsTboTFAllPassed = false;
+        if (!r8.passed) dqsTboTFAllPassed = false;
     }
-    std::cout << "[E1] LBS GPU/CPU TF validation: " << (lbsTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
-    std::cout << "[E1] DQS GPU/CPU TF validation: " << (dqsTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
+    std::cout << "[E1] LBS-naive (uniform) GPU/CPU TF validation: " << (lbsTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
+    std::cout << "[E1] DQS-naive (uniform) GPU/CPU TF validation: " << (dqsTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
+    std::cout << "[E1] LBS-pre (uniform) GPU/CPU TF validation:   " << (lbsPreTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
+    std::cout << "[E1] DQS-pre (uniform) GPU/CPU TF validation:   " << (dqsPreTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
+    std::cout << "[E1] LBS-pre (UBO) GPU/CPU TF validation:       " << (lbsUboTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
+    std::cout << "[E1] DQS-pre (UBO) GPU/CPU TF validation:       " << (dqsUboTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
+    std::cout << "[E1] LBS-pre (TBO) GPU/CPU TF validation:       " << (lbsTboTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
+    std::cout << "[E1] DQS-pre (TBO) GPU/CPU TF validation:       " << (dqsTboTFAllPassed ? "ALL PASS" : "SOME FAIL") << "\n";
 
     ValidateLBSNaiveVsPre();
     ValidateDQSNaiveVsPre();
@@ -772,8 +1408,10 @@ void Experiment1::Run() {
 
     std::cout << "\n-- Writing CSVs --\n";
     WriteQualityCSV("Results/e1_quality.csv");
+    WriteQualityCSV("Results_fixed/e1_quality.csv");
     WriteQualityCSV("e1_quality.csv");
     WriteSlicesCSV("Results/e1_slices.csv");
+    WriteSlicesCSV("Results_fixed/e1_slices.csv");
     WriteSlicesCSV("e1_slices.csv");
 
     std::cout << "[E1] Done. Results written.\n";

@@ -53,10 +53,10 @@ vec4 transformVector(mat2x4 dq, vec3 v) {
     vec4 real = dq[0];
     vec3 r_vector = real.xyz;
     float r_scalar = real.w;
-
-    vec3 rotated = r_vector * 2.0 * dot(r_vector, v) +
+    
+    vec3 rotated = r_vector * 2.0f * dot(r_vector, v) +
             v * (r_scalar * r_scalar - dot(r_vector, r_vector)) +
-            cross(r_vector, v) * 2.0 * r_scalar;
+            cross(r_vector, v) * 2.0f * r_scalar;
 
     return vec4(rotated, 0);
 }
@@ -68,22 +68,39 @@ vec4 transformPoint(mat2x4 dq, vec3 v) {
     vec3 rotated = transformVector(dq, v).xyz;
     vec4 conjugate = vec4(-real.xyz, real.w);
     vec3 t = mulQ(conjugate, dual * 2.0).xyz;
-
+    
     return vec4(rotated + t, 1);
 }
 
 void main() {
     vec4 w = weights;
     // Neighborhood all of the quaternions correctly
+#if INFLUENCES >= 2
     if (dot(pose[joints.x][0], pose[joints.y][0]) < 0.0) { w.y *= -1.0; }
+#endif
+#if INFLUENCES >= 3
     if (dot(pose[joints.x][0], pose[joints.z][0]) < 0.0) { w.z *= -1.0; }
+#endif
+#if INFLUENCES >= 4
     if (dot(pose[joints.x][0], pose[joints.w][0]) < 0.0) { w.w *= -1.0; }
+#endif
+
     // Combine
     mat2x4 dq0 = combineDq(invBindPose[joints.x], pose[joints.x]);
+    mat2x4 skinDq = w.x * dq0;
+#if INFLUENCES >= 2
     mat2x4 dq1 = combineDq(invBindPose[joints.y], pose[joints.y]);
+    skinDq += w.y * dq1;
+#endif
+#if INFLUENCES >= 3
     mat2x4 dq2 = combineDq(invBindPose[joints.z], pose[joints.z]);
+    skinDq += w.z * dq2;
+#endif
+#if INFLUENCES >= 4
     mat2x4 dq3 = combineDq(invBindPose[joints.w], pose[joints.w]);
-    mat2x4 skinDq = w.x * dq0 + w.y * dq1 + w.z * dq2 +  w.w * dq3;
+    skinDq += w.w * dq3;
+#endif
+
     skinDq = normalizeDq(skinDq);
     vec4 v = transformPoint(skinDq, position);
     gl_Position = projection * view * model * v;

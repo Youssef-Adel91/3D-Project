@@ -34,6 +34,12 @@ private:
     Shader* mDQSShader;      // dualquaternion.vert (DQS-naive, for TF validation)
     Shader* mLBSTFShader;    // skinned_tf.vert (with tf_position out)
     Shader* mDQSTFShader;    // dualquaternion_tf.vert (with tf_position out)
+    Shader* mLBSPreTFShader; // preskinned_tf.vert
+    Shader* mDQSPreTFShader; // dqs_pre_tf.vert
+    Shader* mLBSPreUBOTFShader; // preskinned_ubo_tf.vert
+    Shader* mDQSPreUBOTFShader; // dqs_pre_ubo_tf.vert
+    Shader* mLBSPreTBOTFShader; // preskinned_tbo_tf.vert
+    Shader* mDQSPreTBOTFShader; // dqs_pre_tbo_tf.vert
 
     // --- CPU skinning ---
     // LBS: skinned position = sum_i w_i * pose[i] * invBind[i] * restPos
@@ -42,6 +48,10 @@ private:
                                const std::vector<vec4>& weights,
                                const std::vector<mat4>& posePalette,
                                const std::vector<mat4>& invBind) const;
+    std::vector<vec3> SkinLBSPre(const std::vector<vec3>& restPos,
+                                  const std::vector<ivec4>& joints,
+                                  const std::vector<vec4>& weights,
+                                  const std::vector<mat4>& animated) const;
 
     // DQS: skinned position using dual quaternion blending
     std::vector<vec3> SkinDQS(const std::vector<vec3>& restPos,
@@ -49,6 +59,10 @@ private:
                                const std::vector<vec4>& weights,
                                const std::vector<DualQuaternion>& poseDQ,
                                const std::vector<DualQuaternion>& invBindDQ) const;
+    std::vector<vec3> SkinDQSPre(const std::vector<vec3>& restPos,
+                                  const std::vector<ivec4>& joints,
+                                  const std::vector<vec4>& weights,
+                                  const std::vector<DualQuaternion>& animated) const;
 
     // --- Geometry metrics ---
     // Signed volume of closed mesh via signed tetrahedra.
@@ -82,6 +96,12 @@ private:
     };
     TFResult ValidateLBSWithTF(Pose pose, float angleDeg);
     TFResult ValidateDQSWithTF(Pose pose, float angleDeg);
+    TFResult ValidateLBSPreWithTF(Pose pose, float angleDeg);
+    TFResult ValidateDQSPreWithTF(Pose pose, float angleDeg);
+    TFResult ValidateLBSUBODWithTF(Pose pose, float angleDeg);
+    TFResult ValidateDQSUBODWithTF(Pose pose, float angleDeg);
+    TFResult ValidateLBSTBODWithTF(Pose pose, float angleDeg);
+    TFResult ValidateDQSTBODWithTF(Pose pose, float angleDeg);
 
     // --- TF GPU capture helper ---
     std::vector<vec3> CaptureGPU_LBS(const std::vector<mat4>& posePalette,
@@ -90,6 +110,18 @@ private:
     std::vector<vec3> CaptureGPU_DQS(const std::vector<DualQuaternion>& poseDQ,
                                       const std::vector<DualQuaternion>& invBindDQ,
                                       const Mesh& mesh);
+    std::vector<vec3> CaptureGPU_LBS_Pre(const std::vector<mat4>& animated,
+                                          const Mesh& mesh);
+    std::vector<vec3> CaptureGPU_DQS_Pre(const std::vector<DualQuaternion>& animated,
+                                          const Mesh& mesh);
+    std::vector<vec3> CaptureGPU_LBS_UBO(const std::vector<mat4>& animated,
+                                          const Mesh& mesh);
+    std::vector<vec3> CaptureGPU_DQS_UBO(const std::vector<DualQuaternion>& animated,
+                                          const Mesh& mesh);
+    std::vector<vec3> CaptureGPU_LBS_TBO(const std::vector<mat4>& animated,
+                                          const Mesh& mesh);
+    std::vector<vec3> CaptureGPU_DQS_TBO(const std::vector<DualQuaternion>& animated,
+                                          const Mesh& mesh);
 
     // Validation: compare LBS-naive vs LBS-pre outputs
     void ValidateLBSNaiveVsPre();

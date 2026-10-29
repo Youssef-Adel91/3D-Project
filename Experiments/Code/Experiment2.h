@@ -25,6 +25,7 @@ public:
 
     bool Initialize();
     void Run();
+    void RunDeadCodeBenchmark();
     void Shutdown();
 
 private:

@@ -579,6 +579,8 @@ void Experiment2::Run() {
     }
 
     WriteCSV("Results/e2_gpu.csv");
+    WriteCSV("Results_fixed/e2_gpu.csv");
+    WriteCSV("e2_gpu.csv");
     std::cout << "[E2] Done.\n";
 }
 
@@ -596,4 +598,75 @@ void Experiment2::WriteCSV(const std::string& path) const {
           << r.cpuPaletteMs << "," << r.uploadMs << "\n";
     }
     std::cout << "[E2] Wrote " << path << " (" << mResults.size() << " rows)\n";
+}
+
+void Experiment2::RunDeadCodeBenchmark() {
+    std::cout << "\n=== Dead-Code Risk Benchmark: Discard vs Full Rendering ===\n";
+    std::cout << "Comparing Discard (GL_RASTERIZER_DISCARD) vs Full Rendering (normal & fragPos consumed in lit.frag)\n";
+    std::cout << "5 runs each at 60 bones, 4 influences\n\n";
+
+    int targetVerts[] = { 100000, 1000000 };
+    const char* variantNames[] = { "LBS-naive", "LBS-pre", "DQS-naive", "DQS-pre" };
+
+    struct DeadCodeRow {
+        std::string mode;
+        int vertices;
+        std::string variant;
+        double runMedians[5];
+        double median;
+        double minVal;
+        double maxVal;
+    };
+    std::vector<DeadCodeRow> rows;
+
+    for (int targetVc : targetVerts) {
+        BenchMesh mesh;
+        mesh.Generate(targetVc, 60, 4);
+        int actualVerts = mesh.VertexCount();
+        std::cout << "[DeadCode] Mesh generated: " << actualVerts << " vertices, 60 bones, 4 influences\n";
+
+        for (bool rastDiscard : { true, false }) {
+            std::string mode = rastDiscard ? "Discard" : "FullRender";
+            std::cout << "\n--- Mode: " << mode << " (" << actualVerts << " vertices) ---\n";
+
+            for (int vi = 0; vi < NUM_VARIANTS; ++vi) {
+                Variant v = (Variant)vi;
+                DeadCodeRow row;
+                row.mode = mode;
+                row.vertices = actualVerts;
+                row.variant = variantNames[vi];
+
+                std::vector<double> runs;
+                for (int run = 0; run < 5; ++run) {
+                    std::vector<double> gpuTimes;
+                    double cpuMs = 0.0, upMs = 0.0;
+                    RunVariant(v, mesh, 60, 4, 50, 200, rastDiscard, false, gpuTimes, cpuMs, upMs);
+                    double med = Median(gpuTimes);
+                    row.runMedians[run] = med;
+                    runs.push_back(med);
+                }
+                std::sort(runs.begin(), runs.end());
+                row.minVal = runs.front();
+                row.maxVal = runs.back();
+                row.median = runs[2];
+                rows.push_back(row);
+
+                std::cout << "  " << row.variant << ": median=" << row.median 
+                          << " ms [" << row.minVal << " - " << row.maxVal << "]\n";
+            }
+        }
+    }
+
+    for (const std::string& p : { "Results_fixed/dead_code_bench.csv", "Results/dead_code_bench.csv", "dead_code_bench.csv" }) {
+        std::ofstream f(p);
+        if (f.is_open()) {
+            f << "mode,vertices,variant,run1,run2,run3,run4,run5,median,min,max\n";
+            for (const auto& r : rows) {
+                f << r.mode << "," << r.vertices << "," << r.variant << ","
+                  << r.runMedians[0] << "," << r.runMedians[1] << "," << r.runMedians[2] << ","
+                  << r.runMedians[3] << "," << r.runMedians[4] << ","
+                  << r.median << "," << r.minVal << "," << r.maxVal << "\n";
+            }
+        }
+    }
 }
