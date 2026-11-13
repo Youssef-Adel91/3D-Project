@@ -21,6 +21,11 @@
 #include "Experiment1b.h"
 #include "Experiment2.h"
 #include "Experiment3.h"
+#include "Experiment4.h"
+#include "Experiment5.h"
+#include "Experiment6.h"
+#include "Experiment7.h"
+#include "Experiment8.h"
 #include "GLTFLoader.h"
 #include "Uniform.h"
 
@@ -321,12 +326,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     std::string cmd = szCmdLine ? szCmdLine : "";
     bool runE1 = ((cmd.find("--e1") != std::string::npos && cmd.find("--e1b") == std::string::npos) || (cmd.find("--all") != std::string::npos));
     bool runE1b = (cmd.find("--e1b") != std::string::npos);
-    bool runE2 = (cmd.find("--e2") != std::string::npos) || (cmd.find("--all") != std::string::npos);
+    bool runE2Audit = (cmd.find("--e2-audit") != std::string::npos);
+    bool runE2Reversed = (cmd.find("--e2-reversed") != std::string::npos);
+    bool runE2 = ((cmd.find("--e2") != std::string::npos && !runE2Audit && !runE2Reversed) || (cmd.find("--all") != std::string::npos));
     bool runE3 = (cmd.find("--e3") != std::string::npos) || (cmd.find("--all") != std::string::npos);
     bool runScreenshots = (cmd.find("--screenshots") != std::string::npos) || (cmd.find("--all") != std::string::npos);
     bool runDeadCode = (cmd.find("--dead-code") != std::string::npos);
     bool runRecord = (cmd.find("--record") != std::string::npos);
-    bool isInteractive = (!runE1 && !runE1b && !runE2 && !runE3 && !runScreenshots && !runDeadCode && !runRecord) || (cmd.find("--interactive") != std::string::npos);
+    bool runE4 = (cmd.find("--e4") != std::string::npos);
+    bool runE5 = (cmd.find("--e5") != std::string::npos);
+    bool runE6 = (cmd.find("--e6") != std::string::npos);
+    bool runE7 = (cmd.find("--e7") != std::string::npos);
+    bool runE8 = (cmd.find("--e8") != std::string::npos);
+    bool runComparePaths = (cmd.find("--compare-paths") != std::string::npos);
+    bool shuffleVertices = (cmd.find("--shuffle-vertices") != std::string::npos);
+    bool isInteractive = (!runE1 && !runE1b && !runE2 && !runE3 && !runScreenshots && !runDeadCode && !runRecord && !runE4 && !runE5 && !runE6 && !runE7 && !runE8 && !runComparePaths && !runE2Audit && !runE2Reversed && !shuffleVertices) || (cmd.find("--interactive") != std::string::npos);
 
     std::string recordOut = "Screenshots_v2/out.mp4";
     size_t recPos = cmd.find("--record");
@@ -430,6 +444,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
+    DisableProcessWindowsGhosting();
 
     // Write hardware and environment settings
     WriteEnvCSV(vsynch);
@@ -481,6 +496,70 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
 
     if (runRecord) {
         RecordVideos(hdc, clientWidth, clientHeight, recordOut);
+    }
+
+    if (runE4) {
+        Experiment4 e4;
+        if (e4.Initialize()) {
+            e4.Run();
+            e4.Shutdown();
+        }
+    }
+
+    if (runComparePaths) {
+        Experiment4 e4;
+        if (e4.Initialize()) {
+            e4.RunComparePaths();
+            e4.Shutdown();
+        }
+    }
+
+    if (runE2Audit) {
+        Experiment4 e4;
+        if (e4.Initialize()) {
+            e4.RunE2SweepAudit(false);
+            e4.Shutdown();
+        }
+    }
+
+    if (runE2Reversed) {
+        Experiment4 e4;
+        if (e4.Initialize()) {
+            e4.RunE2SweepAudit(true);
+            e4.Shutdown();
+        }
+    }
+
+    if (runE5 || shuffleVertices) {
+        Experiment5 e5;
+        if (e5.Initialize()) {
+            e5.Run(shuffleVertices);
+            e5.Shutdown();
+        }
+    }
+
+    if (runE6) {
+        Experiment6 e6;
+        if (e6.Initialize()) {
+            e6.Run();
+            e6.Shutdown();
+        }
+    }
+
+    if (runE7) {
+        Experiment7 e7;
+        if (e7.Initialize()) {
+            e7.Run();
+            e7.Shutdown();
+        }
+    }
+
+    if (runE8) {
+        Experiment8 e8;
+        if (e8.Initialize()) {
+            e8.Run();
+            e8.Shutdown();
+        }
     }
 
     if (!isInteractive) {
@@ -610,6 +689,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam) {
         }
         break;
     case WM_PAINT:
+        ValidateRect(hwnd, NULL);
+        return 0;
     case WM_ERASEBKGND:
         return 0;
     }

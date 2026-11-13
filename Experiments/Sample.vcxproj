@@ -144,6 +144,11 @@
     <ClCompile Include="Code\Experiment1b.cpp" />
     <ClCompile Include="Code\Experiment2.cpp" />
     <ClCompile Include="Code\Experiment3.cpp" />
+    <ClCompile Include="Code\Experiment4.cpp" />
+    <ClCompile Include="Code\Experiment5.cpp" />
+    <ClCompile Include="Code\Experiment6.cpp" />
+    <ClCompile Include="Code\Experiment7.cpp" />
+    <ClCompile Include="Code\Experiment8.cpp" />
     <ClCompile Include="Code\FABRIKSolver.cpp" />
     <ClCompile Include="Code\glad.c" />
     <ClCompile Include="Code\GLTFLoader.cpp" />
@@ -182,6 +187,11 @@
     <ClInclude Include="Code\Experiment1b.h" />
     <ClInclude Include="Code\Experiment2.h" />
     <ClInclude Include="Code\Experiment3.h" />
+    <ClInclude Include="Code\Experiment4.h" />
+    <ClInclude Include="Code\Experiment5.h" />
+    <ClInclude Include="Code\Experiment6.h" />
+    <ClInclude Include="Code\Experiment7.h" />
+    <ClInclude Include="Code\Experiment8.h" />
     <ClInclude Include="Code\FABRIKSolver.h" />
     <ClInclude Include="Code\Frame.h" />
     <ClInclude Include="Code\glad.h" />
