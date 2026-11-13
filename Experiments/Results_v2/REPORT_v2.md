@@ -1,3 +1,5 @@
+> SUPERSEDED. Several numbers below do not match the CSV files. Use REPORT_v2_corrected.md, which is generated from the CSVs.
+
 # Reviewer Round Benchmark Report: Comprehensive Evaluation of LBS vs. DQS
 
 **Branch:** `reviewer-round` (derived from `final`)  
