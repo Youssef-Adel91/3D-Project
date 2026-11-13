@@ -223,3 +223,4 @@ All figures, raw data files, and reports reside in `Experiments/Results_v2/`:
 - `e7_scale.csv`, `E7_REPORT.md` (Scale and shear breakdown)
 - `e8_woman.csv`, `E8_REPORT.md` (Instanced real-world character benchmark)
 - `REPORT_v2.md` (This document)
+
