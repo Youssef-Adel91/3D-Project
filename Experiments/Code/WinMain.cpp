@@ -334,13 +334,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     bool runDeadCode = (cmd.find("--dead-code") != std::string::npos);
     bool runRecord = (cmd.find("--record") != std::string::npos);
     bool runE4 = (cmd.find("--e4") != std::string::npos);
-    bool runE5 = (cmd.find("--e5") != std::string::npos);
+    bool runE5b = (cmd.find("--e5b") != std::string::npos);
+    bool runE5Exact = (cmd.find("--e5-exact") != std::string::npos);
+    bool runE5 = ((cmd.find("--e5") != std::string::npos && !runE5b && !runE5Exact) || (cmd.find("--all") != std::string::npos));
     bool runE6 = (cmd.find("--e6") != std::string::npos);
     bool runE7 = (cmd.find("--e7") != std::string::npos);
     bool runE8 = (cmd.find("--e8") != std::string::npos);
     bool runComparePaths = (cmd.find("--compare-paths") != std::string::npos);
     bool shuffleVertices = (cmd.find("--shuffle-vertices") != std::string::npos);
-    bool isInteractive = (!runE1 && !runE1b && !runE2 && !runE3 && !runScreenshots && !runDeadCode && !runRecord && !runE4 && !runE5 && !runE6 && !runE7 && !runE8 && !runComparePaths && !runE2Audit && !runE2Reversed && !shuffleVertices) || (cmd.find("--interactive") != std::string::npos);
+    bool isInteractive = (!runE1 && !runE1b && !runE2 && !runE3 && !runScreenshots && !runDeadCode && !runRecord && !runE4 && !runE5 && !runE5b && !runE5Exact && !runE6 && !runE7 && !runE8 && !runComparePaths && !runE2Audit && !runE2Reversed && !shuffleVertices) || (cmd.find("--interactive") != std::string::npos);
 
     std::string recordOut = "Screenshots_v2/out.mp4";
     size_t recPos = cmd.find("--record");
@@ -534,6 +536,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
         Experiment5 e5;
         if (e5.Initialize()) {
             e5.Run(shuffleVertices);
+            e5.Shutdown();
+        }
+    }
+
+    if (runE5b) {
+        Experiment5 e5;
+        if (e5.Initialize()) {
+            e5.RunE5bChecks();
+            e5.Shutdown();
+        }
+    }
+
+    if (runE5Exact) {
+        Experiment5 e5;
+        if (e5.Initialize()) {
+            e5.RunE5Exact();
             e5.Shutdown();
         }
     }

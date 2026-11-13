@@ -847,6 +847,15 @@ void Experiment4::Run() {
 // Direct Path Comparison: E2 vs E4 Harness at 99,852 Vertices
 // ============================================================
 
+static std::string GetWallClockTimestamp() {
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    char buf[64];
+    sprintf(buf, "%04d/%02d/%02d %02d:%02d:%02d.%03d",
+            st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+    return std::string(buf);
+}
+
 void Experiment4::RunComparePaths() {
     std::cout << "\n=======================================================\n";
     std::cout << "  CONTROL EXPERIMENT: E2 vs E4 PATHS AT 99,852 VERTICES  \n";
@@ -862,6 +871,19 @@ void Experiment4::RunComparePaths() {
     mesh.Generate(100000, bones, influences); // exactly 99,852 actual vertices
     std::cout << "[Test] Generated mesh: " << mesh.VertexCount() << " vertices, " << mesh.IndexCount() << " indices\n" << std::endl;
 
+    struct CompareRecord {
+        std::string path;
+        std::string variant;
+        int run;
+        double med;
+        double p5;
+        double p95;
+        int vertices;
+        int bones;
+        int influences;
+    };
+    std::vector<CompareRecord> records;
+
     auto calcStats = [](std::vector<double>& v, double& med, double& mn, double& mx) {
         if (v.empty()) { med = mn = mx = 0.0; return; }
         std::sort(v.begin(), v.end());
@@ -875,6 +897,7 @@ void Experiment4::RunComparePaths() {
     std::vector<double> e2_lbs_runs(numRuns), e2_dqs_runs(numRuns);
 
     for (int run = 0; run < numRuns; ++run) {
+        std::cout << "[ComparePaths] " << GetWallClockTimestamp() << " START Run " << (run + 1) << " E2 LBS-pre" << std::endl;
         // Run LBS-pre via E2 logic
         {
             Shader* shader = mShaders[VAR_LBS_PRE_4X4];
@@ -924,9 +947,15 @@ void Experiment4::RunComparePaths() {
             double ms = 0.0;
             while (timer.Pop(ms)) gpuTimes.push_back(ms);
             std::sort(gpuTimes.begin(), gpuTimes.end());
-            e2_lbs_runs[run] = gpuTimes[gpuTimes.size() / 2];
+            double med = gpuTimes[gpuTimes.size() / 2];
+            double p5  = gpuTimes[(size_t)(gpuTimes.size() * 0.05)];
+            double p95 = gpuTimes[(size_t)(gpuTimes.size() * 0.95)];
+            e2_lbs_runs[run] = med;
+            records.push_back({ "e2", "LBS-pre", run, med, p5, p95, mesh.VertexCount(), bones, influences });
         }
+        std::cout << "[ComparePaths] " << GetWallClockTimestamp() << " END Run " << (run + 1) << " E2 LBS-pre" << std::endl;
 
+        std::cout << "[ComparePaths] " << GetWallClockTimestamp() << " START Run " << (run + 1) << " E2 DQS-pre" << std::endl;
         // Run DQS-pre via E2 logic
         {
             Shader* shader = mShaders[VAR_DQS_PRE_BASE];
@@ -985,8 +1014,13 @@ void Experiment4::RunComparePaths() {
             double ms = 0.0;
             while (timer.Pop(ms)) gpuTimes.push_back(ms);
             std::sort(gpuTimes.begin(), gpuTimes.end());
-            e2_dqs_runs[run] = gpuTimes[gpuTimes.size() / 2];
+            double med = gpuTimes[gpuTimes.size() / 2];
+            double p5  = gpuTimes[(size_t)(gpuTimes.size() * 0.05)];
+            double p95 = gpuTimes[(size_t)(gpuTimes.size() * 0.95)];
+            e2_dqs_runs[run] = med;
+            records.push_back({ "e2", "DQS-pre", run, med, p5, p95, mesh.VertexCount(), bones, influences });
         }
+        std::cout << "[ComparePaths] " << GetWallClockTimestamp() << " END Run " << (run + 1) << " E2 DQS-pre" << std::endl;
 
         std::cout << "  E2 Run " << (run + 1) << ": LBS-pre = " << std::fixed << std::setprecision(4)
                   << e2_lbs_runs[run] << " ms | DQS-pre = " << e2_dqs_runs[run] << " ms" << std::endl;
@@ -1000,13 +1034,25 @@ void Experiment4::RunComparePaths() {
         double cpuMs = 0, upMs = 0;
         std::vector<double> lbsTimes, dqsTimes;
 
+        std::cout << "[ComparePaths] " << GetWallClockTimestamp() << " START Run " << (run + 1) << " E4 LBS-pre" << std::endl;
         RunConfig(VAR_LBS_PRE_4X4, PATH_UNIFORM, mesh, bones, influences, numWarmup, numFrames, lbsTimes, cpuMs, upMs);
         std::sort(lbsTimes.begin(), lbsTimes.end());
-        e4_lbs_runs[run] = lbsTimes[lbsTimes.size() / 2];
+        double med_lbs = lbsTimes[lbsTimes.size() / 2];
+        double p5_lbs  = lbsTimes[(size_t)(lbsTimes.size() * 0.05)];
+        double p95_lbs = lbsTimes[(size_t)(lbsTimes.size() * 0.95)];
+        e4_lbs_runs[run] = med_lbs;
+        records.push_back({ "e4", "LBS-pre", run, med_lbs, p5_lbs, p95_lbs, mesh.VertexCount(), bones, influences });
+        std::cout << "[ComparePaths] " << GetWallClockTimestamp() << " END Run " << (run + 1) << " E4 LBS-pre" << std::endl;
 
+        std::cout << "[ComparePaths] " << GetWallClockTimestamp() << " START Run " << (run + 1) << " E4 DQS-pre" << std::endl;
         RunConfig(VAR_DQS_PRE_BASE, PATH_UNIFORM, mesh, bones, influences, numWarmup, numFrames, dqsTimes, cpuMs, upMs);
         std::sort(dqsTimes.begin(), dqsTimes.end());
-        e4_dqs_runs[run] = dqsTimes[dqsTimes.size() / 2];
+        double med_dqs = dqsTimes[dqsTimes.size() / 2];
+        double p5_dqs  = dqsTimes[(size_t)(dqsTimes.size() * 0.05)];
+        double p95_dqs = dqsTimes[(size_t)(dqsTimes.size() * 0.95)];
+        e4_dqs_runs[run] = med_dqs;
+        records.push_back({ "e4", "DQS-pre", run, med_dqs, p5_dqs, p95_dqs, mesh.VertexCount(), bones, influences });
+        std::cout << "[ComparePaths] " << GetWallClockTimestamp() << " END Run " << (run + 1) << " E4 DQS-pre" << std::endl;
 
         std::cout << "  E4 Run " << (run + 1) << ": LBS-pre = " << std::fixed << std::setprecision(4)
                   << e4_lbs_runs[run] << " ms | DQS-pre = " << e4_dqs_runs[run] << " ms" << std::endl;
@@ -1025,15 +1071,29 @@ void Experiment4::RunComparePaths() {
     std::cout << "  [E4 Path] LBS-pre: " << e4_lbs_med << " ms [" << e4_lbs_mn << " - " << e4_lbs_mx << "]" << std::endl;
     std::cout << "  [E4 Path] DQS-pre: " << e4_dqs_med << " ms [" << e4_dqs_mn << " - " << e4_dqs_mx << "]" << std::endl;
     std::cout << "-------------------------------------------------------\n" << std::endl;
-}
 
-static std::string GetWallClockTimestamp() {
-    SYSTEMTIME st;
-    GetLocalTime(&st);
-    char buf[64];
-    sprintf(buf, "%04d/%02d/%02d %02d:%02d:%02d.%03d",
-            st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
-    return std::string(buf);
+    // Save CSV
+    CreateDirectoryA("Results_v2", NULL);
+    CreateDirectoryA("Experiments/Results_v2", NULL);
+    for (const std::string& csvPath : { "Results_v2/compare_paths.csv", "Experiments/Results_v2/compare_paths.csv" }) {
+        std::ofstream f(csvPath);
+        if (f.is_open()) {
+            f << "path,variant,run,gpu_ms_median,p5,p95,vertices,bones,influences\n";
+            for (const auto& r : records) {
+                f << r.path << ","
+                  << r.variant << ","
+                  << r.run << ","
+                  << std::fixed << std::setprecision(6)
+                  << r.med << ","
+                  << r.p5 << ","
+                  << r.p95 << ","
+                  << r.vertices << ","
+                  << r.bones << ","
+                  << r.influences << "\n";
+            }
+            std::cout << "[ComparePaths] Saved " << csvPath << std::endl;
+        }
+    }
 }
 
 void Experiment4::RunE2SweepAudit(bool reversed) {

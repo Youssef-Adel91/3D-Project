@@ -26,6 +26,8 @@ public:
 
     bool Initialize();
     void Run(bool onlyShuffleMode = false);
+    void RunE5Exact();
+    void RunE5bChecks();
     void Shutdown();
 
     // Verify shuffled mesh equivalence: un-permuted positions match coherent within 1e-6
@@ -35,6 +37,10 @@ public:
     // Create a shuffled copy of a BenchMesh
     static void CreateShuffledMesh(const BenchMesh& inCoherent, BenchMesh& outShuffled,
                                    std::vector<int>& outPerm, unsigned int seed = 42);
+
+    // Create a block-permuted copy of a BenchMesh (permutes vertices only inside blocks of size blockSize)
+    static void CreateBlockShuffledMesh(const BenchMesh& inCoherent, BenchMesh& outShuffled,
+                                        std::vector<int>& outPerm, int blockSize, unsigned int seed = 42);
 
 private:
     enum E5Variant {
